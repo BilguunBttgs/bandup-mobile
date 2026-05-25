@@ -8,6 +8,13 @@
       "when": 1779685643602,
       "tag": "0000_little_the_hand",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1779688218615,
+      "tag": "0001_watery_hellfire_club",
+      "breakpoints": true
     }
   ]
 }
