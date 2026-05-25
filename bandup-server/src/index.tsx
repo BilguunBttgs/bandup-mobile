@@ -1,12 +1,11 @@
-import { Hono } from 'hono'
-import { renderer } from './renderer'
+import { Hono } from "hono";
+import { renderer } from "./renderer";
+import { auth } from "./routes/auth";
 
-const app = new Hono()
+const app = new Hono<{ Bindings: CloudflareBindings }>();
 
-app.use(renderer)
+app.use(renderer);
 
-app.get('/', (c) => {
-  return c.render(<h1>Hello!</h1>)
-})
+app.route("/auth", auth);
 
-export default app
+export default app;

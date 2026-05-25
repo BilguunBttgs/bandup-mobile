@@ -32,3 +32,9 @@ lerna-debug.log*
 
 # misc
 .DS_Store
+
+# Generated Cloudflare types (regenerate with bun run cf-typegen)
+worker-configuration.d.ts
+
+# Wrangler local DB state
+.wrangler/state/

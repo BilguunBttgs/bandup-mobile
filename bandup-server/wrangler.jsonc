@@ -2,5 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bandup-server",
   "compatibility_date": "2025-08-03",
-  "main": "./src/index.tsx"
+  "main": "./src/index.tsx",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "bandup-db",
+      "database_id": "a18650ed-4a94-42d6-96ca-81754ca06510",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ]
 }

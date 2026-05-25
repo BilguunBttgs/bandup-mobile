@@ -6,13 +6,21 @@
     "build": "vite build",
     "preview": "$npm_execpath run build && vite preview",
     "deploy": "$npm_execpath run build && wrangler deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply bandup-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply bandup-db --remote"
   },
   "dependencies": {
-    "hono": "^4.12.21"
+    "@hono/zod-validator": "^0.8.0",
+    "drizzle-orm": "^0.45.2",
+    "graphql": "^16.14.0",
+    "hono": "^4.12.21",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.2.3",
+    "drizzle-kit": "^0.31.10",
     "vite": "^6.3.5",
     "vite-ssr-components": "^0.6.1",
     "wrangler": "^4.17.0"
