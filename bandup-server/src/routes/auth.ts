@@ -111,7 +111,7 @@ auth.post("/signin", zValidator("json", signinSchema), async (c) => {
       iat: now,
       exp: now + 60 * 60 * 24 * 7, // 7 days
     },
-    c.env.JWT_SECRET
+    c.env.JWT_SECRET,
   );
 
   return c.json({

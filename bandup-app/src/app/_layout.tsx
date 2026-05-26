@@ -1,15 +1,40 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import '../global.css';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect } from 'react';
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+import { useAuthStore } from '@/stores/auth-store';
+
+export default function RootLayout() {
+  const router = useRouter();
+  const segments = useSegments();
+
+  const token = useAuthStore((s) => s.token);
+  const isHydrated = useAuthStore((s) => s.isHydrated);
+  const hydrate = useAuthStore((s) => s.hydrate);
+
+  // Load the stored token once on mount
+  useEffect(() => {
+    hydrate();
+  }, [hydrate]);
+
+  // Redirect to the correct group whenever auth state changes
+  useEffect(() => {
+    if (!isHydrated) return;
+
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!token && !inAuthGroup) {
+      router.replace('/(auth)');
+    } else if (token && inAuthGroup) {
+      router.replace('/(app)');
+    }
+  }, [token, isHydrated, segments, router]);
+
+  // Don't render anything until we've read the stored token
+  if (!isHydrated) return null;
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <Stack screenOptions={{ headerShown: false }} />
   );
 }
