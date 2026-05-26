@@ -1,3 +1,4 @@
+import "../global.css"
 import * as Device from 'expo-device';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,7 +35,7 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.safeArea}>
         <ThemedView style={styles.heroSection}>
           <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
+          <ThemedText type="title" className='text-blue-100'>
             Welcome to&nbsp;Expo
           </ThemedText>
         </ThemedView>
