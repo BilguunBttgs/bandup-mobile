@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-**BandUp** is a mobile app backend for IELTS learners. Users sign up, complete onboarding, then take reading exercises (passages + MCQ / True-False-Not-Given questions). The server scores answers, converts results to IELTS band scores, and tracks each user's personal best. The backend runs entirely on **Cloudflare Workers** — no Node.js, no traditional server.
+**BandUp** is a mobile app backend for IELTS learners. Users sign up, complete onboarding, then take reading exercises (passages + MCQ / True-False-Not-Given questions). The server scores answers, converts results to IELTS band scores, and tracks each user's personal best. A gamification layer adds per-skill characters (HP/XP/level), a coin economy, daily quests, and a cosmetics shop. The backend runs entirely on **Cloudflare Workers** — no Node.js, no traditional server.
 
 ---
 
@@ -64,12 +64,18 @@ src/
 │
 ├── db/
 │   ├── index.ts                       # createDb(d1) — creates a Drizzle client from a D1 binding
+│   ├── seeds/
+│   │   └── quests.sql                 # 10 starter quests; run with wrangler d1 execute --file
 │   └── schema/
 │       ├── index.ts                   # Re-exports all tables + relations
 │       ├── users.ts                   # users table
 │       ├── readings.ts                # readings table
 │       ├── questions.ts               # questions + question_options tables
 │       ├── submissions.ts             # user_reading_submissions table
+│       ├── characters.ts              # characters table (per-skill RPG character)
+│       ├── user_stats.ts              # user_stats table (XP, coins, streak — one row per user)
+│       ├── quests.ts                  # quests (templates) + user_quests (daily progress) tables
+│       ├── shop.ts                    # shop_items + user_inventory tables
 │       └── relations.ts               # Drizzle relation definitions (for relational queries)
 │
 ├── routes/
@@ -93,7 +99,10 @@ src/
 └── lib/
     ├── auth-middleware.ts             # JWT Bearer verification; sets userId + username on context
     ├── band-score.ts                  # calculateBandScore(correct, total) → 0–9 IELTS band
-    └── password.ts                    # hashPassword / verifyPassword (PBKDF2, constant-time)
+    ├── password.ts                    # hashPassword / verifyPassword (PBKDF2, constant-time)
+    ├── xp-engine.ts                   # xpToLevel, levelToXpThreshold, awardSkillXp, awardUserXp, awardCoins, spendCoins
+    ├── streak-engine.ts               # recordActivity, applyMissedStreakDamage, getStreakInfo
+    └── quest-engine.ts                # generateDailyQuests, incrementQuestProgress, getTodayQuests
 
 drizzle/
 └── migrations/                        # Auto-generated SQL migration files (commit these)
@@ -185,6 +194,95 @@ One row per attempt (retakes allowed; no uniqueness constraint on `userId+readin
 | `bandScore` | real | 0–9 in 0.5 steps, computed by `calculateBandScore` |
 | `timeTakenSeconds` | integer | Client-reported |
 | `submittedAt` | timestamp | Unix epoch |
+
+---
+
+## Gamification schema
+
+### `characters` (`src/db/schema/characters.ts`)
+One character per skill per user. HP decreases on wrong answers; XP drives level-up.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `userId` | integer FK → users.id | CASCADE delete |
+| `skill` | `"reading"│"listening"│"writing"│"speaking"` | |
+| `hp` | integer | Current HP; max 100; default `100` |
+| `xp` | integer | Lifetime XP for this character; default `0` |
+| `level` | integer | default `1` |
+| `skinId` | text? | Nullable — references a `shop_items` id resolved in app layer |
+| `isAlive` | boolean | `false` when HP reaches 0; default `true` |
+| `createdAt` | timestamp | Unix epoch |
+
+---
+
+### `user_stats` (`src/db/schema/user_stats.ts`)
+One row per user (unique constraint on `userId`). Tracks lifetime economy state.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `userId` | integer FK → users.id UNIQUE | CASCADE delete |
+| `totalXp` | integer | Sum across all characters; default `0` |
+| `coins` | integer | Spendable currency; default `0` |
+| `streakDays` | integer | Consecutive days with activity; default `0` |
+| `lastActivityDate` | text? | ISO date `YYYY-MM-DD`; null until first activity |
+| `createdAt` | timestamp | Unix epoch |
+
+---
+
+### `quests` + `user_quests` (`src/db/schema/quests.ts`)
+`quests` are reusable templates (seeded by admins). `user_quests` track daily progress.
+
+**`quests`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `titleMn` | text | Mongolian display title |
+| `descriptionMn` | text | Mongolian description |
+| `skillTarget` | `"reading"│"listening"│"writing"│"speaking"│"any"` | `"any"` counts all skills |
+| `requiredCount` | integer | Number of completions required |
+| `xpReward` | integer | XP granted on completion |
+| `coinReward` | integer | Coins granted on completion |
+| `isActive` | boolean | Whether the quest is currently assignable; default `true` |
+
+**`user_quests`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `userId` | integer FK → users.id | CASCADE delete |
+| `questId` | integer FK → quests.id | CASCADE delete |
+| `date` | text | ISO date `YYYY-MM-DD` — the day this quest was assigned |
+| `progress` | integer | How many times the activity has been completed; default `0` |
+| `isCompleted` | boolean | default `false` |
+| `completedAt` | timestamp? | Null until completed |
+
+---
+
+### `shop_items` + `user_inventory` (`src/db/schema/shop.ts`)
+`shop_items` is the catalogue; `user_inventory` records purchases.
+
+**`shop_items`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `nameMn` | text | Mongolian name |
+| `descriptionMn` | text | Mongolian description |
+| `type` | `"booster"│"cosmetic_profile"│"cosmetic_character"` | |
+| `effectKey` | text? | e.g. `"xp_multiplier_2x"`; null for pure cosmetics |
+| `priceCoin` | integer | Cost in coins |
+| `iconKey` | text | Asset key resolved by the client |
+| `isAvailable` | boolean | Whether the item appears in the shop; default `true` |
+
+**`user_inventory`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `userId` | integer FK → users.id | CASCADE delete |
+| `itemId` | integer FK → shop_items.id | CASCADE delete |
+| `purchasedAt` | timestamp | Unix epoch; DB default `unixepoch()` |
+| `expiresAt` | timestamp? | Null = permanent; set for time-limited boosters |
+| `isEquipped` | boolean | App code must enforce at-most-one equipped per slot; default `false` |
 
 ---
 
@@ -381,6 +479,82 @@ calculateBandScore(0, 5)  // → 0.0
 ### `src/lib/password.ts`
 PBKDF2 + SHA-256, 100 k iterations, 16-byte random salt. Output is base64-encoded `(salt || derivedKey)`. `verifyPassword` uses constant-time comparison to prevent timing attacks.
 
+### `src/lib/quest-engine.ts`
+Daily quest assignment, progress tracking, and completion. No module-level DB.
+
+**Exported types:**
+- `CompletedQuest` — `UserQuest` + `{ titleMn, skillTarget, xpReward, coinReward }` — returned by `incrementQuestProgress` so callers can immediately award rewards via xp-engine.
+- `QuestWithTemplate` — `UserQuest` + full quest template fields — returned by `getTodayQuests`.
+
+**Functions:**
+
+| Function | What it does | Returns |
+|---|---|---|
+| `generateDailyQuests(db, userId, dateIso)` | Fetches all active quest templates, excludes ones already assigned for this user+date, Fisher-Yates shuffles the remainder, inserts up to 3 new `user_quests` rows | `UserQuest[]` (newly inserted) |
+| `incrementQuestProgress(db, userId, skill, dateIso)` | Joins today's incomplete `user_quests` with templates; filters where `skillTarget === skill \|\| skillTarget === "any"`; increments `progress` by 1; marks `isCompleted=true` + sets `completedAt` when `progress >= requiredCount` | `CompletedQuest[]` (only newly completed) |
+| `getTodayQuests(db, userId, dateIso)` | Single inner-join query returning all quests (any state) for the given user+date | `QuestWithTemplate[]` |
+
+`generateDailyQuests` is idempotent per day — calling it twice won't create duplicate quests. All DB writes use sequential `for` loops (D1 serial requirement).
+
+**Seed file:** `src/db/seeds/quests.sql` — 10 starter quests in Mongolian.
+
+| Skill | Quests |
+|---|---|
+| `reading` | Complete 1; Complete 3 |
+| `listening` | Complete 1; Complete 3 |
+| `writing` | Complete 1 |
+| `speaking` | Complete 1 |
+| `any` | Complete 1 / 3 / 5 / 10 |
+
+XP rewards range from 30 (any×1) to 500 (any×10). Uses `INSERT OR IGNORE` so it's safe to re-run.
+
+```bash
+# Local dev
+wrangler d1 execute bandup-db --local --file=src/db/seeds/quests.sql
+# Production
+wrangler d1 execute bandup-db --file=src/db/seeds/quests.sql
+```
+
+---
+
+### `src/lib/streak-engine.ts`
+Daily streak tracking and streak-break damage. No module-level DB; all DB functions accept a `Database` instance.
+
+**Exported constant:**
+- `HP_DAMAGE_PER_MISS = 20` — HP deducted from every character when a streak is broken.
+
+**Functions:**
+
+| Function | What it does | Returns |
+|---|---|---|
+| `recordActivity(db, userId, dateIso)` | Upserts `user_stats`; increments streak if `lastActivityDate` was yesterday, resets to 1 if older, no-ops if already today | `{ streakDays, wasNew }` |
+| `applyMissedStreakDamage(db)` | **Cron handler.** Finds all users with `lastActivityDate < today AND streakDays > 0`; inside one transaction: resets `streakDays=0`, deals `HP_DAMAGE_PER_MISS` to every character, sets `isAlive=false` on characters hitting 0 HP | `{ affected }` |
+| `getStreakInfo(db, userId)` | Returns streak state + per-skill HP snapshot; HP is `null` for skills with no character row yet | `{ streakDays, lastActivityDate, hp: {reading,listening,writing,speaking} }` |
+
+Date arithmetic uses UTC (`Date.setUTCDate`) so the engine is timezone-safe. The damage sweep selects affected users before opening the transaction, then iterates with sequential `for` loops (D1 serial requirement — no `Promise.all`).
+
+---
+
+### `src/lib/xp-engine.ts`
+Gamification helpers. Pure functions handle the math; DB functions accept a `Database` instance (created by the caller via `createDb(c.env.DB)`) — never module-level.
+
+**Pure:**
+```ts
+xpToLevel(xp)           // floor(1 + sqrt(xp / 100)), capped at 50
+levelToXpThreshold(lvl) // (lvl - 1)^2 * 100 — minimum XP to reach that level
+```
+
+**DB (all return a Promise):**
+
+| Function | What it does | Returns |
+|---|---|---|
+| `awardSkillXp(db, userId, skill, xpAmount)` | Adds XP to the matching `characters` row; creates the row if absent; recomputes `level` | `{ newXp, newLevel, leveledUp }` |
+| `awardUserXp(db, userId, xpAmount)` | Upserts `user_stats.totalXp += xpAmount` | `{ totalXp }` |
+| `awardCoins(db, userId, amount)` | Upserts `user_stats.coins += amount` | `{ coins }` |
+| `spendCoins(db, userId, amount)` | Deducts coins; no-ops and returns `success: false` if balance is insufficient | `{ coins, success }` |
+
+`awardUserXp` and `awardCoins` use `INSERT … ON CONFLICT DO UPDATE` so callers never need to pre-create the `user_stats` row.
+
 ---
 
 ## Conventions & patterns
@@ -410,4 +584,5 @@ PBKDF2 + SHA-256, 100 k iterations, 16-byte random salt. Output is base64-encode
 - `POST /auth/refresh` — token refresh endpoint
 - Onboarding flow endpoints (step progression, score submission)
 - Listening / Speaking / Writing exercise routes (same pattern as reading)
+- Gamification API routes: character management, quest assignment/progress, shop purchase, inventory equip
 - GraphQL layer (`graphql` package is installed, not wired up yet)
