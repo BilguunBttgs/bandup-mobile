@@ -2,4 +2,8 @@ export * from "./users";
 export * from "./readings";
 export * from "./questions";
 export * from "./submissions";
+export * from "./characters";
+export * from "./user_stats";
+export * from "./quests";
+export * from "./shop";
 export * from "./relations";
