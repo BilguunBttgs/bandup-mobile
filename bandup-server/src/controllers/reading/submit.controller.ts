@@ -8,8 +8,12 @@ import {
   questionOptions,
   users,
   userReadingSubmissions,
+  characters,
 } from "../../db/schema";
 import { calculateBandScore } from "../../lib/band-score";
+import { recordActivity } from "../../lib/streak-engine";
+import { incrementQuestProgress } from "../../lib/quest-engine";
+import { awardSkillXp, awardUserXp, awardCoins } from "../../lib/xp-engine";
 
 export const submitSchema = z.object({
   answers: z
@@ -139,11 +143,58 @@ export async function submitReadingController(
       .where(eq(users.id, userId));
   }
 
+  // 7. Gamification — streak, quests, XP, coins
+  const dateIso = new Date().toISOString().slice(0, 10);
+
+  await recordActivity(db, userId, dateIso);
+
+  const completedQuests = await incrementQuestProgress(db, userId, "reading", dateIso);
+
+  const xpEarned = Math.round(bandScore * 20) + 10;
+  const coinsEarned = correctCount * 2;
+
+  const skillXpResult = await awardSkillXp(db, userId, "reading", xpEarned);
+  const userXpResult = await awardUserXp(db, userId, xpEarned);
+  const coinsResult = await awardCoins(db, userId, coinsEarned);
+
+  // Award quest completion bonuses (sequential — D1 is serial)
+  for (const quest of completedQuests) {
+    await awardUserXp(db, userId, quest.xpReward);
+    await awardCoins(db, userId, quest.coinReward);
+  }
+
+  // Fetch the reading character's HP for the response (awardSkillXp lazy-creates the row)
+  const [charRow] = await db
+    .select({ hp: characters.hp })
+    .from(characters)
+    .where(and(eq(characters.userId, userId), eq(characters.skill, "reading")))
+    .limit(1);
+
   return c.json({
     correct_count: correctCount,
     total_questions: totalQuestions,
     band_score: bandScore,
     time_taken_seconds,
     answers: answerDetails,
+    xp_earned: xpEarned,
+    coins_earned: coinsEarned,
+    quests_completed: completedQuests.map((q) => ({
+      titleMn: q.titleMn,
+      xp_reward: q.xpReward,
+      coin_reward: q.coinReward,
+    })),
+    character: {
+      skill: "reading",
+      hp: charRow?.hp ?? 100,
+      level: skillXpResult.newLevel,
+      xp: skillXpResult.newXp,
+    },
+    rewards: {
+      skill_xp: skillXpResult.newXp,
+      skill_level: skillXpResult.newLevel,
+      leveled_up: skillXpResult.leveledUp,
+      total_xp: userXpResult.totalXp,
+      coins: coinsResult.coins,
+    },
   });
 }

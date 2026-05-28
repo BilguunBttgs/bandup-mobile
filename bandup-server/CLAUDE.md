@@ -496,7 +496,7 @@ Returns the full reading: passage + questions + options. `isCorrect` is **never*
 ---
 
 #### `POST /reading/:id/submit`
-Scores a completed reading attempt. Server computes correctness from DB (client cannot cheat by sending `is_correct`). Updates `users.readingScore` if the new band is higher than the stored best.
+Scores a completed reading attempt. Server computes correctness from DB (client cannot cheat by sending `is_correct`). Updates `users.readingScore` if the new band is higher than the stored best. Also runs the full gamification chain: streak, quest progress, skill XP, total XP, coins.
 
 **Body:**
 ```json
@@ -519,9 +519,24 @@ Scores a completed reading attempt. Server computes correctness from DB (client 
   "answers": [
     { "question_id": 10, "option_id": 42, "is_correct": true, "explanation": "The author uses 'however' to signal..." },
     { "question_id": 11, "option_id": 47, "is_correct": false, "explanation": null }
-  ]
+  ],
+  "xp_earned": 150,
+  "coins_earned": 8,
+  "quests_completed": [
+    { "titleMn": "Нэг дасгал хий", "xp_reward": 50, "coin_reward": 10 }
+  ],
+  "character": { "skill": "reading", "hp": 100, "level": 2, "xp": 160 },
+  "rewards": {
+    "skill_xp": 160,
+    "skill_level": 2,
+    "leveled_up": true,
+    "total_xp": 160,
+    "coins": 18
+  }
 }
 ```
+
+XP formula: `xpEarned = round(bandScore * 20) + 10`; coins: `correctCount * 2`. Quest bonuses added on top.
 
 **Responses:** `200`, `400`, `404`, `422` (reading has no questions)
 
