@@ -15,6 +15,8 @@ export const users = sqliteTable("users", {
   listeningScore: real("listening_score"),
   speakingScore: real("speaking_score"),
   writingScore: real("writing_score"),
+  targetBand: real("target_band"),                                    // desired IELTS band (0–9, 0.5 steps); set in onboarding step 0
+  dailyGoalMinutes: integer("daily_goal_minutes").notNull().default(30), // study goal set in onboarding step 1
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),

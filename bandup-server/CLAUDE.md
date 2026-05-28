@@ -94,8 +94,9 @@ src/
 │
 ├── controllers/
 │   ├── auth/
-│   │   ├── signup.controller.ts       # POST /auth/signup
-│   │   └── signin.controller.ts       # POST /auth/signin → issues JWT
+│   │   ├── signup.controller.ts          # POST /auth/signup
+│   │   ├── signin.controller.ts          # POST /auth/signin → issues JWT
+│   │   └── onboardingStep.controller.ts  # POST /auth/onboarding/step (JWT) — 4-step onboarding flow
 │   ├── reading/
 │   │   ├── list.controller.ts         # GET /reading?level=
 │   │   ├── get.controller.ts          # GET /reading/:id (passage + questions, NO correct answers)
@@ -165,7 +166,9 @@ Schema is split into `src/db/schema/` — one file per table group. All tables a
 | `email` | text UNIQUE | |
 | `password` | text | PBKDF2 hash of 4-digit PIN |
 | `isOnboarding` | boolean | `true` until onboarding complete; default `true` |
-| `onboardingStep` | integer | Current onboarding step; default `0` |
+| `onboardingStep` | integer | Current onboarding step (0–3); default `0` |
+| `targetBand` | real | Desired IELTS band set in onboarding step 0; nullable |
+| `dailyGoalMinutes` | integer | Daily study goal set in onboarding step 1; default `30` |
 | `readingScore` | real | Best IELTS reading band (0–9, 0.5 steps); `null` = not yet assessed |
 | `listeningScore` | real | Same — not yet assessed via this server |
 | `speakingScore` | real | Same |
@@ -378,7 +381,7 @@ Weekly top-10 snapshot written by the Monday cron. One row per user per snapshot
 
 ## API routes
 
-### Auth — `/auth` (public, no token required)
+### Auth — `/auth`
 
 #### `POST /auth/signup`
 Creates a new user account.
@@ -420,6 +423,31 @@ Verifies credentials and returns a JWT.
 - `400` — validation failure
 - `401` — wrong password
 - `404` — no account for that email / username
+
+---
+
+#### `POST /auth/onboarding/step` (JWT required)
+Advances the user through the 4-step onboarding flow. Must be called in order (steps 0 → 1 → 2 → 3). Returns `409` if onboarding is already complete. Returns `400` if the submitted step doesn't match the server's current `onboardingStep`.
+
+**Body (all steps):**
+```json
+{ "step": 0, "data": { ... } }
+```
+
+| Step | `data` fields | What happens |
+|---|---|---|
+| `0` | `{ "target_band": 7.0 }` | Stores `users.targetBand`; advances to step 1 |
+| `1` | `{ "daily_goal_minutes": 30 }` | Stores `users.dailyGoalMinutes`; advances to step 2 |
+| `2` | `{ "reading_id": 1, "answers": [{ "question_id": 10, "option_id": 42 }] }` | Scores answers against DB, stores initial `users.readingScore`; advances to step 3 |
+| `3` | _(none needed)_ | Creates `user_stats` + 4 character rows + today's quests; sets `isOnboarding=false` |
+
+**Response `200`:**
+```json
+{ "step": 0, "nextStep": 1, "data": { "target_band": 7.0 } }
+```
+For step 2, `data` includes `{ "correct_count", "total_questions", "band_score" }`. For step 3, `nextStep` is `null` and `data` is `{ "quests_assigned": 3 }`.
+
+**Responses:** `200`, `400` (wrong step or bad data), `404` (user not found), `409` (onboarding already done), `422` (step 2: reading has no questions)
 
 ---
 
@@ -891,7 +919,6 @@ curl "http://localhost:8787/__scheduled?cron=0+17+*+*+*"
 ## What's next (planned, not yet built)
 
 - `POST /auth/refresh` — token refresh endpoint
-- Onboarding flow endpoints (step progression, score submission)
 - Speaking / Writing exercise routes (same pattern as reading/listening)
 - `GET /game/leaderboard/history` — surface past weekly snapshots from `leaderboard_snapshots`
 - GraphQL layer (`graphql` package is installed, not wired up yet)
