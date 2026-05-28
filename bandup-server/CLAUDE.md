@@ -59,7 +59,7 @@ src/lib/                      — Shared utilities (auth, password, band score)
 
 ```
 src/
-├── index.tsx                          # App entry — registers global error handler + 4 route groups
+├── index.tsx                          # App entry — registers global error handler + 5 route groups
 ├── renderer.tsx                       # JSX layout wrapper (Hono JSX, NOT React)
 ├── style.css                          # Global stylesheet
 │
@@ -86,6 +86,7 @@ src/
 │   ├── auth.ts                        # /auth/* — public (signup, signin)
 │   ├── reading.ts                     # /reading/* — requires JWT
 │   ├── listening.ts                   # /listening/* — requires JWT
+│   ├── game.ts                        # /game/* — requires JWT (player state, checkin, revive, leaderboard)
 │   └── admin.ts                       # /admin/* — requires X-Admin-Key header
 │
 ├── controllers/
@@ -100,6 +101,11 @@ src/
 │   │   ├── list.controller.ts         # GET /listening?level=
 │   │   ├── get.controller.ts          # GET /listening/:id (questions + presigned audio URL, NO answers)
 │   │   └── submit.controller.ts       # POST /listening/:id/submit → scores + gamification rewards
+│   ├── game/
+│   │   ├── state.controller.ts        # GET /game/state (lazy-init stats + chars; today's quests)
+│   │   ├── checkin.controller.ts      # POST /game/checkin (streak + daily quest generation)
+│   │   ├── revive.controller.ts       # POST /game/revive (50-coin character restore)
+│   │   └── leaderboard.controller.ts  # GET /game/leaderboard (top 20 by totalXp)
 │   └── admin/
 │       ├── createReading.controller.ts   # POST /admin/readings (reading + questions + options in one TX)
 │       ├── listReadings.controller.ts    # GET /admin/readings
@@ -641,6 +647,68 @@ Returns `{ uploadUrl, audioKey }` — PUT the audio file directly to `uploadUrl`
 
 ---
 
+### Game — `/game` (JWT required: `Authorization: Bearer <token>`)
+
+#### `GET /game/state`
+Returns the full player state in one call. Lazy-initialises `user_stats` and all 4 character rows if they don't exist yet.
+
+**Response `200`:**
+```json
+{
+  "stats": { "totalXp": 320, "coins": 45, "streakDays": 3, "lastActivityDate": "2026-05-28" },
+  "characters": [
+    { "skill": "reading",   "hp": 100, "xp": 200, "level": 2, "isAlive": true, "skinId": null },
+    { "skill": "listening", "hp": 80,  "xp": 120, "level": 1, "isAlive": true, "skinId": null },
+    { "skill": "writing",   "hp": 100, "xp": 0,   "level": 1, "isAlive": true, "skinId": null },
+    { "skill": "speaking",  "hp": 100, "xp": 0,   "level": 1, "isAlive": true, "skinId": null }
+  ],
+  "quests": [
+    { "id": 1, "titleMn": "Нэг дасгал хий", "descriptionMn": "...", "skillTarget": "reading",
+      "requiredCount": 1, "progress": 0, "isCompleted": false, "xpReward": 50, "coinReward": 10 }
+  ]
+}
+```
+
+---
+
+#### `POST /game/checkin`
+Records today's activity (streak), then auto-generates today's quests if this is the first check-in of the day.
+
+**Response `200`:**
+```json
+{ "streakDays": 4, "wasNew": true, "date": "2026-05-28", "quests": [...] }
+```
+`wasNew: false` means the user already checked in today — streak unchanged, quests unchanged.
+
+---
+
+#### `POST /game/revive`
+Spends 50 coins to restore a dead (or damaged) character to full HP.
+
+**Body:** `{ "skill": "reading" | "listening" | "writing" | "speaking" }`
+
+**Response `200`:**
+```json
+{ "character": { "skill": "reading", "hp": 100, "xp": 200, "level": 2, "isAlive": true, "skinId": null }, "coins": 0 }
+```
+
+**Responses:** `200`, `400` (validation), `402` `{ "error": "Хүрэлцэхгүй монет", "coins": <current> }` if insufficient coins
+
+---
+
+#### `GET /game/leaderboard`
+Top 20 users by lifetime XP.
+
+**Response `200`:**
+```json
+[
+  { "rank": 1, "userId": 42, "username": "top_learner", "totalXp": 5000, "streakDays": 14 },
+  { "rank": 2, "userId": 7,  "username": "studyhard",   "totalXp": 3200, "streakDays": 5 }
+]
+```
+
+---
+
 ## Utilities / lib
 
 ### `src/lib/auth-middleware.ts`
@@ -746,8 +814,9 @@ Presigned URL helpers for Cloudflare R2. All functions accept an `R2Bucket` inst
 
 | Function | What it does | Returns |
 |---|---|---|
-| `getAudioPresignUrl(r2, key, expiresIn=3600)` | Generates a presigned GET URL for a listening audio file | `Promise<string>` |
-| `getSpeakingUploadUrl(r2, userId, attemptId, expiresIn=600)` | Generates a presigned PUT URL for a speaking recording. Key pattern: `speaking/{userId}/{attemptId}.webm` | `Promise<{ uploadUrl, audioKey }>` — store `audioKey` in the submissions table |
+| `getAudioPresignUrl(r2, key, expiresIn=3600)` | Presigned GET URL for any R2 object | `Promise<string>` |
+| `getListeningUploadUrl(r2, level, expiresIn=600)` | Presigned PUT URL for a listening file. Key pattern: `listening/{level}/{uuid}.webm` | `Promise<{ uploadUrl, audioKey }>` |
+| `getSpeakingUploadUrl(r2, userId, attemptId, expiresIn=600)` | Presigned PUT URL for a speaking recording. Key pattern: `speaking/{userId}/{attemptId}.webm` | `Promise<{ uploadUrl, audioKey }>` |
 | `deleteAudio(r2, key)` | Deletes an object from the bucket (admin cleanup) | `Promise<void>` |
 
 ```ts
@@ -784,6 +853,7 @@ const { uploadUrl, audioKey } = await getSpeakingUploadUrl(r2, userId, attemptId
 
 - `POST /auth/refresh` — token refresh endpoint
 - Onboarding flow endpoints (step progression, score submission)
-- Listening / Speaking / Writing exercise routes (same pattern as reading)
-- Gamification API routes: character management, quest assignment/progress, shop purchase, inventory equip
+- Speaking / Writing exercise routes (same pattern as reading/listening)
+- Shop routes: browse items (`GET /shop`), purchase (`POST /shop/buy`), equip (`POST /shop/equip`)
+- Cron handler for `applyMissedStreakDamage` (scheduled daily via Cloudflare Cron Triggers)
 - GraphQL layer (`graphql` package is installed, not wired up yet)
