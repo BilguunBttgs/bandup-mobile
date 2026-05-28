@@ -14,6 +14,7 @@ import { calculateBandScore } from "../../lib/band-score";
 import { recordActivity } from "../../lib/streak-engine";
 import { incrementQuestProgress } from "../../lib/quest-engine";
 import { awardSkillXp, awardUserXp, awardCoins } from "../../lib/xp-engine";
+import { mongoError } from "../../lib/errors";
 
 export const submitSchema = z.object({
   answers: z
@@ -38,7 +39,7 @@ export async function submitReadingController(
   c: Context<ReadingEnv>,
 ): Promise<Response> {
   const readingId = Number(c.req.param("id"));
-  if (isNaN(readingId)) return c.json({ error: "Invalid reading ID" }, 400);
+  if (isNaN(readingId)) return c.json(mongoError("INVALID_ID"), 400);
 
   const { answers, time_taken_seconds } = await c.req.json<SubmitInput>();
   const userId = c.get("userId");
@@ -51,7 +52,7 @@ export async function submitReadingController(
     .where(eq(readings.id, readingId))
     .limit(1);
 
-  if (!readingRow) return c.json({ error: "Reading not found" }, 404);
+  if (!readingRow) return c.json(mongoError("NOT_FOUND"), 404);
 
   // 2. Fetch all questions for this reading.
   //    totalQuestions comes from the DB — not the client's answer count (anti-cheat).
@@ -62,7 +63,7 @@ export async function submitReadingController(
 
   const totalQuestions = readingQuestions.length;
   if (totalQuestions === 0) {
-    return c.json({ error: "This reading has no questions yet" }, 422);
+    return c.json(mongoError("NO_QUESTIONS"), 422);
   }
 
   // 3. Fetch the correct option for every question in this reading.

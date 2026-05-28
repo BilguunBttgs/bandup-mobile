@@ -13,6 +13,7 @@ import { calculateBandScore } from "../../lib/band-score";
 import { recordActivity } from "../../lib/streak-engine";
 import { incrementQuestProgress } from "../../lib/quest-engine";
 import { awardSkillXp, awardUserXp, awardCoins } from "../../lib/xp-engine";
+import { mongoError } from "../../lib/errors";
 
 export const submitSchema = z.object({
   answers: z
@@ -46,7 +47,7 @@ export async function submitListeningController(
   c: Context<ListeningEnv>,
 ): Promise<Response> {
   const listeningId = Number(c.req.param("id"));
-  if (isNaN(listeningId)) return c.json({ error: "Invalid listening ID" }, 400);
+  if (isNaN(listeningId)) return c.json(mongoError("INVALID_ID"), 400);
 
   const { answers, time_taken_seconds } = await c.req.json<SubmitInput>();
   const userId = c.get("userId");
@@ -59,7 +60,7 @@ export async function submitListeningController(
     .where(eq(listenings.id, listeningId))
     .limit(1);
 
-  if (!listeningRow) return c.json({ error: "Listening not found" }, 404);
+  if (!listeningRow) return c.json(mongoError("NOT_FOUND"), 404);
 
   // 2. Fetch all questions — totalQuestions from DB, not client (anti-cheat)
   const listeningQs = await db
@@ -69,7 +70,7 @@ export async function submitListeningController(
 
   const totalQuestions = listeningQs.length;
   if (totalQuestions === 0) {
-    return c.json({ error: "This listening has no questions yet" }, 422);
+    return c.json(mongoError("NO_QUESTIONS"), 422);
   }
 
   // 3. Fetch correct options — Map: questionId → correctOptionId

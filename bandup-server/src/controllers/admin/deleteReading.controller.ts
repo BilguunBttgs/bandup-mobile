@@ -2,12 +2,13 @@ import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { readings } from "../../db/schema";
+import { mongoError } from "../../lib/errors";
 
 export async function deleteReadingController(
   c: Context<{ Bindings: CloudflareBindings }>,
 ): Promise<Response> {
   const id = Number(c.req.param("id"));
-  if (isNaN(id)) return c.json({ error: "Invalid reading ID" }, 400);
+  if (isNaN(id)) return c.json(mongoError("INVALID_ID"), 400);
 
   const db = createDb(c.env.DB);
 
@@ -17,7 +18,7 @@ export async function deleteReadingController(
     .where(eq(readings.id, id))
     .limit(1);
 
-  if (!existing) return c.json({ error: "Reading not found" }, 404);
+  if (!existing) return c.json(mongoError("NOT_FOUND"), 404);
 
   await db.delete(readings).where(eq(readings.id, id));
 

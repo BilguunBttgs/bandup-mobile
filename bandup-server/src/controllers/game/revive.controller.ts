@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { characters } from "../../db/schema";
 import { spendCoins } from "../../lib/xp-engine";
+import { mongoError } from "../../lib/errors";
 
 export const reviveSchema = z.object({
   skill: z.enum(["reading", "listening", "writing", "speaking"]),
@@ -26,7 +27,7 @@ export async function reviveController(c: Context<GameEnv>): Promise<Response> {
   // Deduct coins first — abort early if balance is insufficient
   const { success, coins } = await spendCoins(db, userId, REVIVE_COST);
   if (!success) {
-    return c.json({ error: "Хүрэлцэхгүй монет", coins }, 402);
+    return c.json({ ...mongoError("INSUFFICIENT_COINS"), coins }, 402);
   }
 
   // Restore the character — create it with full HP if it doesn't exist yet

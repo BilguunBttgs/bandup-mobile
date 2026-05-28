@@ -5,6 +5,7 @@ import { createDb } from "../../db";
 import { users, questions, questionOptions, characters, userStats } from "../../db/schema";
 import { calculateBandScore } from "../../lib/band-score";
 import { generateDailyQuests } from "../../lib/quest-engine";
+import { mongoError } from "../../lib/errors";
 
 export const onboardingStepSchema = z.object({
   step: z.number().int().min(0).max(3),
@@ -52,20 +53,17 @@ export async function onboardingStepController(
     .where(eq(users.id, userId))
     .limit(1);
 
-  if (!user) return c.json({ error: "User not found" }, 404);
-  if (!user.isOnboarding) return c.json({ error: "Onboarding already completed" }, 409);
+  if (!user) return c.json(mongoError("NOT_FOUND"), 404);
+  if (!user.isOnboarding) return c.json(mongoError("ONBOARDING_DONE"), 409);
   if (step !== user.onboardingStep) {
-    return c.json(
-      { error: `Expected step ${user.onboardingStep}, got ${step}` },
-      400,
-    );
+    return c.json(mongoError("INVALID_STEP"), 400);
   }
 
   // ── Step 0: pick target band ──────────────────────────────────────────────
   if (step === 0) {
     const parsed = step0DataSchema.safeParse(data);
     if (!parsed.success) {
-      return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid data" }, 400);
+      return c.json({ error: parsed.error.issues[0]?.message ?? mongoError("VALIDATION_ERROR").error }, 400);
     }
 
     await db
@@ -80,7 +78,7 @@ export async function onboardingStepController(
   if (step === 1) {
     const parsed = step1DataSchema.safeParse(data);
     if (!parsed.success) {
-      return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid data" }, 400);
+      return c.json({ error: parsed.error.issues[0]?.message ?? mongoError("VALIDATION_ERROR").error }, 400);
     }
 
     await db
@@ -99,7 +97,7 @@ export async function onboardingStepController(
   if (step === 2) {
     const parsed = step2DataSchema.safeParse(data);
     if (!parsed.success) {
-      return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid data" }, 400);
+      return c.json({ error: parsed.error.issues[0]?.message ?? mongoError("VALIDATION_ERROR").error }, 400);
     }
 
     const { reading_id, answers } = parsed.data;
@@ -112,7 +110,7 @@ export async function onboardingStepController(
 
     const totalQuestions = readingQuestions.length;
     if (totalQuestions === 0) {
-      return c.json({ error: "Reading has no questions" }, 422);
+      return c.json(mongoError("NO_QUESTIONS"), 422);
     }
 
     const qIds = readingQuestions.map((q) => q.id);
@@ -186,5 +184,5 @@ export async function onboardingStepController(
     });
   }
 
-  return c.json({ error: "Invalid step" }, 400);
+  return c.json(mongoError("INVALID_STEP"), 400);
 }

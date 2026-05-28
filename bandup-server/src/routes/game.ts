@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../lib/auth-middleware";
+import { zodValidationHook } from "../lib/errors";
 import { gameStateController } from "../controllers/game/state.controller";
 import { checkinController } from "../controllers/game/checkin.controller";
 import { reviveSchema, reviveController } from "../controllers/game/revive.controller";
@@ -21,7 +22,7 @@ gameRouter.get("/state", gameStateController);
 gameRouter.post("/checkin", checkinController);
 
 // POST /game/revive — spend 50 coins to restore a character to full HP
-gameRouter.post("/revive", zValidator("json", reviveSchema), reviveController);
+gameRouter.post("/revive", zValidator("json", reviveSchema, zodValidationHook), reviveController);
 
 // GET /game/leaderboard — top 20 by totalXp
 gameRouter.get("/leaderboard", leaderboardController);

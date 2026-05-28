@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { users } from "../../db/schema";
 import { hashPassword } from "../../lib/password";
+import { mongoError } from "../../lib/errors";
 
 export const signupSchema = z.object({
   username: z
@@ -34,7 +35,7 @@ export async function signupController(
     .limit(1);
 
   if (existingEmail) {
-    return c.json({ error: "Email already registered" }, 409);
+    return c.json(mongoError("AUTH_TAKEN"), 409);
   }
 
   // Check for duplicate username
@@ -45,7 +46,7 @@ export async function signupController(
     .limit(1);
 
   if (existingUsername) {
-    return c.json({ error: "Username already taken" }, 409);
+    return c.json(mongoError("AUTH_TAKEN"), 409);
   }
 
   const hashedPassword = await hashPassword(password);

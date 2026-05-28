@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { createDb } from "../../db";
 import { listenings, listeningQuestions, listeningQuestionOptions } from "../../db/schema";
 import { getAudioPresignUrl } from "../../lib/r2-audio";
+import { mongoError } from "../../lib/errors";
 
 type ListeningEnv = {
   Bindings: CloudflareBindings;
@@ -13,7 +14,7 @@ export async function getListeningController(
   c: Context<ListeningEnv>,
 ): Promise<Response> {
   const id = Number(c.req.param("id"));
-  if (isNaN(id)) return c.json({ error: "Invalid listening ID" }, 400);
+  if (isNaN(id)) return c.json(mongoError("INVALID_ID"), 400);
 
   const db = createDb(c.env.DB);
 
@@ -23,7 +24,7 @@ export async function getListeningController(
     .where(eq(listenings.id, id))
     .limit(1);
 
-  if (!listeningRow) return c.json({ error: "Listening not found" }, 404);
+  if (!listeningRow) return c.json(mongoError("NOT_FOUND"), 404);
 
   // Questions ordered by display position; explanation withheld until submission
   const qs = await db

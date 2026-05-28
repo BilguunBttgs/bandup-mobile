@@ -3,6 +3,7 @@ import { z } from "zod";
 import { and, eq, ne } from "drizzle-orm";
 import { createDb } from "../../db";
 import { userInventory, shopItems } from "../../db/schema";
+import { mongoError } from "../../lib/errors";
 
 export const equipSchema = z.object({
   inventoryId: z.number().int().positive(),
@@ -34,11 +35,11 @@ export async function equipController(c: Context<ShopEnv>): Promise<Response> {
     .limit(1);
 
   if (!row) {
-    return c.json({ error: "Inventory item not found" }, 404);
+    return c.json(mongoError("NOT_FOUND"), 404);
   }
 
   if (row.type === "booster") {
-    return c.json({ error: "Boosters cannot be equipped" }, 400);
+    return c.json(mongoError("BOOSTER_NOT_EQUIPPABLE"), 400);
   }
 
   // Unequip all other cosmetics of the same type for this user, then equip the target

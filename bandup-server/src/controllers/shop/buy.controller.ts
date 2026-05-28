@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { shopItems, userInventory } from "../../db/schema";
 import { spendCoins } from "../../lib/xp-engine";
+import { mongoError } from "../../lib/errors";
 
 export const buySchema = z.object({
   itemId: z.number().int().positive(),
@@ -30,12 +31,12 @@ export async function buyController(c: Context<ShopEnv>): Promise<Response> {
     .limit(1);
 
   if (!item) {
-    return c.json({ error: "Item not found" }, 404);
+    return c.json(mongoError("NOT_FOUND"), 404);
   }
 
   const { success, coins } = await spendCoins(db, userId, item.priceCoin);
   if (!success) {
-    return c.json({ error: "Хүрэлцэхгүй монет", coins }, 402);
+    return c.json({ ...mongoError("INSUFFICIENT_COINS"), coins }, 402);
   }
 
   const expiresAt =

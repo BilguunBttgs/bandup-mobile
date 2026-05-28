@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { users } from "../../db/schema";
 import { verifyPassword } from "../../lib/password";
+import { mongoError } from "../../lib/errors";
 
 export const signinSchema = z.object({
   // A single field — can be either an email address or a username
@@ -32,19 +33,12 @@ export async function signinController(
     .limit(1);
 
   if (!user) {
-    return c.json(
-      {
-        error: isEmail
-          ? "No account found with that email"
-          : "No account found with that username",
-      },
-      404,
-    );
+    return c.json(mongoError("AUTH_NOT_FOUND"), 404);
   }
 
   const passwordMatch = await verifyPassword(password, user.password);
   if (!passwordMatch) {
-    return c.json({ error: "Incorrect password" }, 401);
+    return c.json(mongoError("AUTH_INVALID"), 401);
   }
 
   // Issue a JWT valid for 7 days

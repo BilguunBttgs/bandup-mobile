@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../lib/auth-middleware";
+import { zodValidationHook } from "../lib/errors";
 import { listItemsController } from "../controllers/shop/listItems.controller";
 import { inventoryController } from "../controllers/shop/inventory.controller";
 import { buySchema, buyController } from "../controllers/shop/buy.controller";
@@ -20,9 +21,9 @@ shopRouter.get("/items", listItemsController);
 shopRouter.get("/inventory", inventoryController);
 
 // POST /shop/buy — purchase an item
-shopRouter.post("/buy", zValidator("json", buySchema), buyController);
+shopRouter.post("/buy", zValidator("json", buySchema, zodValidationHook), buyController);
 
 // POST /shop/equip — equip a cosmetic (unequips others of same type)
-shopRouter.post("/equip", zValidator("json", equipSchema), equipController);
+shopRouter.post("/equip", zValidator("json", equipSchema, zodValidationHook), equipController);
 
 export { shopRouter };

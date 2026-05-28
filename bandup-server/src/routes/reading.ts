@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../lib/auth-middleware";
+import { zodValidationHook } from "../lib/errors";
 import { listQuerySchema, listReadingsController } from "../controllers/reading/list.controller";
 import { getReadingController } from "../controllers/reading/get.controller";
 import { submitSchema, submitReadingController } from "../controllers/reading/submit.controller";
@@ -14,12 +15,12 @@ const reading = new Hono<{
 reading.use("*", authMiddleware);
 
 // GET /reading?level=easy|medium|hard
-reading.get("/", zValidator("query", listQuerySchema), listReadingsController);
+reading.get("/", zValidator("query", listQuerySchema, zodValidationHook), listReadingsController);
 
 // GET /reading/:id
 reading.get("/:id", getReadingController);
 
 // POST /reading/:id/submit
-reading.post("/:id/submit", zValidator("json", submitSchema), submitReadingController);
+reading.post("/:id/submit", zValidator("json", submitSchema, zodValidationHook), submitReadingController);
 
 export { reading };

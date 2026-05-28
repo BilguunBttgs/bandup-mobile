@@ -4,6 +4,7 @@ import { createReadingSchema, createReadingController } from "../controllers/adm
 import { listReadingsAdminController } from "../controllers/admin/listReadings.controller";
 import { deleteReadingController } from "../controllers/admin/deleteReading.controller";
 import { createListeningSchema, createListeningController } from "../controllers/admin/createListening.controller";
+import { mongoError, zodValidationHook } from "../lib/errors";
 
 const admin = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -12,13 +13,13 @@ const admin = new Hono<{ Bindings: CloudflareBindings }>();
 admin.use("*", async (c, next) => {
   const key = c.req.header("X-Admin-Key");
   if (!key || key !== c.env.ADMIN_API_KEY) {
-    return c.json({ error: "Unauthorized" }, 401);
+    return c.json(mongoError("AUTH_UNAUTHORIZED"), 401);
   }
   await next();
 });
 
 // POST /admin/readings
-admin.post("/readings", zValidator("json", createReadingSchema), createReadingController);
+admin.post("/readings", zValidator("json", createReadingSchema, zodValidationHook), createReadingController);
 
 // GET /admin/readings
 admin.get("/readings", listReadingsAdminController);
@@ -28,6 +29,6 @@ admin.delete("/readings/:id", deleteReadingController);
 
 // POST /admin/listenings
 // Pass audioKey: null to receive a presigned PUT URL; re-call with the key to insert the record.
-admin.post("/listenings", zValidator("json", createListeningSchema), createListeningController);
+admin.post("/listenings", zValidator("json", createListeningSchema, zodValidationHook), createListeningController);
 
 export { admin };

@@ -874,6 +874,45 @@ levelToXpThreshold(lvl) // (lvl - 1)^2 * 100 — minimum XP to reach that level
 
 ---
 
+### `src/lib/errors.ts`
+Centralised Mongolian error strings and helpers. All controller errors MUST go through this file — no inline English error strings.
+
+**`errors` map** (key → Mongolian message):
+
+| Key | Message |
+|---|---|
+| `AUTH_INVALID` | Нэвтрэх мэдээлэл буруу байна |
+| `AUTH_TAKEN` | Энэ нэр эсвэл имэйл бүртгэлтэй байна |
+| `AUTH_NOT_FOUND` | Тийм нэр эсвэл имэйлтэй хэрэглэгч олдсонгүй |
+| `AUTH_MISSING_TOKEN` | Нэвтрэх токен байхгүй байна |
+| `AUTH_INVALID_TOKEN` | Токен хүчингүй эсвэл хугацаа дууссан байна |
+| `AUTH_UNAUTHORIZED` | Зөвшөөрөлгүй хүсэлт |
+| `ONBOARDING_DONE` | Бүртгэлийн алхам аль хэдийн дууссан байна |
+| `INVALID_STEP` | Буруу алхам |
+| `NOT_FOUND` | Олдсонгүй |
+| `INVALID_ID` | Буруу ID |
+| `VALIDATION_ERROR` | Оруулсан мэдээлэл буруу байна |
+| `INTERNAL_ERROR` | Серверийн дотоод алдаа гарлаа |
+| `NO_QUESTIONS` | Дасгалд асуулт байхгүй байна |
+| `INSUFFICIENT_COINS` | Хүрэлцэхгүй монет |
+| `CHARACTER_DEAD` | Тэмдэгт нас барсан байна. Эргүүлэн амилуулна уу |
+| `STREAK_BROKEN` | Streak тасарлаа! HP хасагдлаа |
+| `BOOSTER_NOT_EQUIPPABLE` | Бустер зүүх боломжгүй |
+
+**Exports:**
+
+```ts
+mongoError(code)       // → { error: string }  — use with c.json(mongoError("NOT_FOUND"), 404)
+zodValidationHook      // pass as 3rd arg to every zValidator() call in route files
+```
+
+When a response also needs extra fields alongside the error (e.g. `coins`), spread the result:
+```ts
+c.json({ ...mongoError("INSUFFICIENT_COINS"), coins }, 402)
+```
+
+---
+
 ### `src/lib/r2-audio.ts`
 Presigned URL helpers for Cloudflare R2. All functions accept an `R2Bucket` instance — always pass `c.env.AUDIO_BUCKET` from inside a handler, never at module level.
 
@@ -912,8 +951,8 @@ curl "http://localhost:8787/__scheduled?cron=0+17+*+*+*"
 ## Conventions & patterns
 
 - **Accessing the DB**: always `createDb(c.env.DB)` inside a handler — never at module level (Workers are stateless per-request).
-- **Returning JSON**: `c.json(data, status)`. Errors follow `{ "error": "message" }`.
-- **Validation**: schema is defined and exported from the controller file (`export const xyzSchema = z.object({...})`), then applied in the route file via `zValidator("json", xyzSchema)`. The handler calls `c.req.json<T>()` (or `c.req.valid("json")`) safely.
+- **Returning JSON**: `c.json(data, status)`. Errors follow `{ "error": "Mongolian message" }` — always via `mongoError()` from `src/lib/errors.ts`.
+- **Validation**: schema is defined and exported from the controller file (`export const xyzSchema = z.object({...})`), then applied in the route file via `zValidator("json", xyzSchema, zodValidationHook)`. The third argument `zodValidationHook` (from `src/lib/errors.ts`) converts Zod failures to Mongolian errors automatically. The handler calls `c.req.json<T>()` (or `c.req.valid("json")`) safely.
 - **Never leak `isCorrect`**: `GET /reading/:id` deliberately omits `isCorrect` from its query; scoring is done server-side in `submit.controller.ts`.
 - **Anti-cheat**: `totalQuestions` in submit is taken from the DB, not from the client's answer array.
 - **Best-score only**: `users.readingScore` is updated only when `newBand > currentBand`.

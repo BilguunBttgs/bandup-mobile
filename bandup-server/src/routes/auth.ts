@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { authMiddleware } from "../lib/auth-middleware";
+import { zodValidationHook } from "../lib/errors";
 import { signupSchema, signupController } from "../controllers/auth/signup.controller";
 import { signinSchema, signinController } from "../controllers/auth/signin.controller";
 import {
@@ -14,16 +15,16 @@ const auth = new Hono<{
 }>();
 
 // POST /auth/signup — public
-auth.post("/signup", zValidator("json", signupSchema), signupController);
+auth.post("/signup", zValidator("json", signupSchema, zodValidationHook), signupController);
 
 // POST /auth/signin — public
-auth.post("/signin", zValidator("json", signinSchema), signinController);
+auth.post("/signin", zValidator("json", signinSchema, zodValidationHook), signinController);
 
 // POST /auth/onboarding/step — JWT required
 auth.post(
   "/onboarding/step",
   authMiddleware,
-  zValidator("json", onboardingStepSchema),
+  zValidator("json", onboardingStepSchema, zodValidationHook),
   onboardingStepController,
 );
 

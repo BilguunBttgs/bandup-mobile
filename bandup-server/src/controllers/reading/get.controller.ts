@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { eq, inArray } from "drizzle-orm";
 import { createDb } from "../../db";
 import { readings, questions, questionOptions } from "../../db/schema";
+import { mongoError } from "../../lib/errors";
 
 type ReadingEnv = {
   Bindings: CloudflareBindings;
@@ -12,7 +13,7 @@ export async function getReadingController(
   c: Context<ReadingEnv>,
 ): Promise<Response> {
   const id = Number(c.req.param("id"));
-  if (isNaN(id)) return c.json({ error: "Invalid reading ID" }, 400);
+  if (isNaN(id)) return c.json(mongoError("INVALID_ID"), 400);
 
   const db = createDb(c.env.DB);
 
@@ -23,7 +24,7 @@ export async function getReadingController(
     .where(eq(readings.id, id))
     .limit(1);
 
-  if (!readingRow) return c.json({ error: "Reading not found" }, 404);
+  if (!readingRow) return c.json(mongoError("NOT_FOUND"), 404);
 
   // Questions ordered by display position; explanation withheld until submission
   const qs = await db

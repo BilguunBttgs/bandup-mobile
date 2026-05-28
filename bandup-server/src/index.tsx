@@ -10,6 +10,7 @@ import { admin } from "./routes/admin";
 import { createDb } from "./db";
 import { userStats, users, leaderboardSnapshots } from "./db/schema";
 import { applyMissedStreakDamage } from "./lib/streak-engine";
+import { mongoError } from "./lib/errors";
 
 const app = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -18,7 +19,7 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 // of an opaque 500, making debugging from the mobile client much easier.
 app.onError((err, c) => {
   console.error(`[${c.req.method}] ${c.req.url}`, err);
-  return c.json({ error: "Internal server error", detail: err.message }, 500);
+  return c.json({ ...mongoError("INTERNAL_ERROR"), detail: err.message }, 500);
 });
 
 app.use(renderer);
