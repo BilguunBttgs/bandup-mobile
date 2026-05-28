@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { createReadingSchema, createReadingController } from "../controllers/admin/createReading.controller";
 import { listReadingsAdminController } from "../controllers/admin/listReadings.controller";
 import { deleteReadingController } from "../controllers/admin/deleteReading.controller";
+import { createListeningSchema, createListeningController } from "../controllers/admin/createListening.controller";
 
 const admin = new Hono<{ Bindings: CloudflareBindings }>();
 
@@ -24,5 +25,9 @@ admin.get("/readings", listReadingsAdminController);
 
 // DELETE /admin/readings/:id
 admin.delete("/readings/:id", deleteReadingController);
+
+// POST /admin/listenings
+// Pass audioKey: null to receive a presigned PUT URL; re-call with the key to insert the record.
+admin.post("/listenings", zValidator("json", createListeningSchema), createListeningController);
 
 export { admin };

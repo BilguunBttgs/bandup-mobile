@@ -40,6 +40,7 @@ bun run db:migrate:remote          # Apply migrations to production D1
 | Auth | `hono/jwt` (HS256) | Sign-in issues a 7-day JWT; `authMiddleware` verifies it on protected routes |
 | Password hashing | PBKDF2 + SHA-256 | Web Crypto API; 100 k iterations, 16-byte salt; `src/lib/password.ts` |
 | Band scoring | Custom table | `src/lib/band-score.ts` — percentage → IELTS 0–9 (0.5 steps) |
+| Audio storage | Cloudflare R2 | Binding name: `AUDIO_BUCKET`; presigned URL helpers in `src/lib/r2-audio.ts` |
 | Bundler | Vite + `@cloudflare/vite-plugin` | Replaces running wrangler directly for local dev |
 
 ### Code pattern — MVC
@@ -58,7 +59,7 @@ src/lib/                      — Shared utilities (auth, password, band score)
 
 ```
 src/
-├── index.tsx                          # App entry — registers global error handler + 3 route groups
+├── index.tsx                          # App entry — registers global error handler + 4 route groups
 ├── renderer.tsx                       # JSX layout wrapper (Hono JSX, NOT React)
 ├── style.css                          # Global stylesheet
 │
@@ -72,6 +73,9 @@ src/
 │       ├── readings.ts                # readings table
 │       ├── questions.ts               # questions + question_options tables
 │       ├── submissions.ts             # user_reading_submissions table
+│       ├── listenings.ts              # listenings table (audio exercises)
+│       ├── listening_questions.ts     # listening_questions + listening_question_options tables
+│       ├── listening_submissions.ts   # user_listening_submissions table
 │       ├── characters.ts              # characters table (per-skill RPG character)
 │       ├── user_stats.ts              # user_stats table (XP, coins, streak — one row per user)
 │       ├── quests.ts                  # quests (templates) + user_quests (daily progress) tables
@@ -81,6 +85,7 @@ src/
 ├── routes/
 │   ├── auth.ts                        # /auth/* — public (signup, signin)
 │   ├── reading.ts                     # /reading/* — requires JWT
+│   ├── listening.ts                   # /listening/* — requires JWT
 │   └── admin.ts                       # /admin/* — requires X-Admin-Key header
 │
 ├── controllers/
@@ -91,10 +96,15 @@ src/
 │   │   ├── list.controller.ts         # GET /reading?level=
 │   │   ├── get.controller.ts          # GET /reading/:id (passage + questions, NO correct answers)
 │   │   └── submit.controller.ts       # POST /reading/:id/submit → scores + saves attempt
+│   ├── listening/
+│   │   ├── list.controller.ts         # GET /listening?level=
+│   │   ├── get.controller.ts          # GET /listening/:id (questions + presigned audio URL, NO answers)
+│   │   └── submit.controller.ts       # POST /listening/:id/submit → scores + gamification rewards
 │   └── admin/
-│       ├── createReading.controller.ts  # POST /admin/readings (reading + questions + options in one TX)
-│       ├── listReadings.controller.ts   # GET /admin/readings
-│       └── deleteReading.controller.ts  # DELETE /admin/readings/:id
+│       ├── createReading.controller.ts   # POST /admin/readings (reading + questions + options in one TX)
+│       ├── listReadings.controller.ts    # GET /admin/readings
+│       ├── deleteReading.controller.ts   # DELETE /admin/readings/:id
+│       └── createListening.controller.ts # POST /admin/listenings (two-step upload flow)
 │
 └── lib/
     ├── auth-middleware.ts             # JWT Bearer verification; sets userId + username on context
@@ -102,7 +112,8 @@ src/
     ├── password.ts                    # hashPassword / verifyPassword (PBKDF2, constant-time)
     ├── xp-engine.ts                   # xpToLevel, levelToXpThreshold, awardSkillXp, awardUserXp, awardCoins, spendCoins
     ├── streak-engine.ts               # recordActivity, applyMissedStreakDamage, getStreakInfo
-    └── quest-engine.ts                # generateDailyQuests, incrementQuestProgress, getTodayQuests
+    ├── quest-engine.ts                # generateDailyQuests, incrementQuestProgress, getTodayQuests
+    └── r2-audio.ts                    # getAudioPresignUrl, getSpeakingUploadUrl, deleteAudio
 
 drizzle/
 └── migrations/                        # Auto-generated SQL migration files (commit these)
@@ -120,6 +131,7 @@ worker-configuration.d.ts              # Auto-generated CF bindings types (run c
 | Name | Type | Purpose |
 |---|---|---|
 | `DB` | D1 (SQLite) | Main database |
+| `AUDIO_BUCKET` | R2 | Stores listening audio files and speaking recordings |
 | `JWT_SECRET` | secret text | Signs and verifies HS256 JWTs |
 | `ADMIN_API_KEY` | secret text | Checked against `X-Admin-Key` header for admin routes |
 
@@ -192,6 +204,56 @@ One row per attempt (retakes allowed; no uniqueness constraint on `userId+readin
 | `correctCount` | integer | Server-computed |
 | `totalQuestions` | integer | Server-computed from DB (not trusting client count) |
 | `bandScore` | real | 0–9 in 0.5 steps, computed by `calculateBandScore` |
+| `timeTakenSeconds` | integer | Client-reported |
+| `submittedAt` | timestamp | Unix epoch |
+
+### `listenings` (`src/db/schema/listenings.ts`)
+Audio exercises. `audioKey` is the R2 object key; presigned GET URLs are generated per-request.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | Auto-increment |
+| `title` | text | Display title |
+| `audioKey` | text | R2 object key — e.g. `"listening/easy/<uuid>.webm"` |
+| `transcript` | text? | Nullable; withheld until post-submission |
+| `level` | `"easy"│"medium"│"hard"` | |
+| `durationSeconds` | integer | Audio length in seconds; shown as playback hint |
+| `createdAt` | timestamp | Unix epoch |
+
+### `listening_questions` + `listening_question_options` (`src/db/schema/listening_questions.ts`)
+Mirror the shape of `questions` / `question_options` but belong exclusively to listenings (separate table — see listenings.ts for rationale).
+
+**`listening_questions`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `listeningId` | integer FK → listenings.id | CASCADE delete |
+| `order` | integer | Display order (0-based) |
+| `text` | text | Question text |
+| `type` | `"multiple_choice"│"true_false_not_given"` | |
+| `explanation` | text? | Revealed post-submission |
+
+**`listening_question_options`**
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `questionId` | integer FK → listening_questions.id | CASCADE delete |
+| `label` | text | `"A"/"B"/"C"/"D"` or `"True"/"False"/"Not Given"` |
+| `text` | text | Option text |
+| `isCorrect` | boolean | **NEVER returned to the client** |
+
+### `user_listening_submissions` (`src/db/schema/listening_submissions.ts`)
+One row per attempt. Same shape as `user_reading_submissions`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | |
+| `userId` | integer FK → users.id | CASCADE delete |
+| `listeningId` | integer FK → listenings.id | CASCADE delete |
+| `answers` | text | JSON: `[{ question_id, option_id }]` |
+| `correctCount` | integer | Server-computed |
+| `totalQuestions` | integer | Server-computed (anti-cheat) |
+| `bandScore` | real | 0–9 in 0.5 steps |
 | `timeTakenSeconds` | integer | Client-reported |
 | `submittedAt` | timestamp | Unix epoch |
 
@@ -409,6 +471,91 @@ Scores a completed reading attempt. Server computes correctness from DB (client 
 
 ---
 
+### Listening — `/listening` (JWT required: `Authorization: Bearer <token>`)
+
+#### `GET /listening?level=easy|medium|hard`
+Lists all listenings (or filtered by level). Does **not** include audio URL or transcript.
+
+**Response `200`:**
+```json
+[{ "id": 1, "title": "...", "level": "easy", "durationSeconds": 120, "questionCount": 5 }]
+```
+
+---
+
+#### `GET /listening/:id`
+Returns metadata + questions + options + a presigned GET URL for the audio file (expires 1h). `isCorrect` and `transcript` are **never** included.
+
+**Response `200`:**
+```json
+{
+  "id": 1,
+  "title": "...",
+  "level": "easy",
+  "durationSeconds": 120,
+  "audioUrl": "<presigned R2 GET URL — 1h TTL>",
+  "questions": [
+    {
+      "id": 10,
+      "order": 0,
+      "text": "What does the speaker say about X?",
+      "type": "multiple_choice",
+      "options": [
+        { "id": 40, "questionId": 10, "label": "A", "text": "..." },
+        { "id": 41, "questionId": 10, "label": "B", "text": "..." }
+      ]
+    }
+  ]
+}
+```
+
+**Responses:** `200`, `400` (bad ID), `404`
+
+---
+
+#### `POST /listening/:id/submit`
+Scores a completed listening attempt. Same anti-cheat and best-score logic as reading. Additionally runs the full gamification chain: streak, quest progress, skill XP, total XP, coins.
+
+**Body:**
+```json
+{
+  "answers": [
+    { "question_id": 10, "option_id": 42 },
+    { "question_id": 11, "option_id": 47 }
+  ],
+  "time_taken_seconds": 95
+}
+```
+
+**Response `200`:**
+```json
+{
+  "correct_count": 4,
+  "total_questions": 5,
+  "band_score": 7.0,
+  "time_taken_seconds": 95,
+  "answers": [
+    { "question_id": 10, "option_id": 42, "is_correct": true, "explanation": "..." }
+  ],
+  "rewards": {
+    "skill_xp": 90,
+    "skill_level": 2,
+    "leveled_up": false,
+    "total_xp": 90,
+    "coins": 14
+  },
+  "completed_quests": [
+    { "title": "Нэг дасгал хий", "xp_reward": 50, "coin_reward": 10 }
+  ]
+}
+```
+
+XP formula: `skillXp = correctCount * 5 + 10`; coins: `floor(bandScore) * 2`. Quest bonuses added on top.
+
+**Responses:** `200`, `400`, `404`, `422` (no questions)
+
+---
+
 ### Admin — `/admin` (header: `X-Admin-Key: <ADMIN_API_KEY>`)
 
 These routes are for seeding/managing content. They are **not** called by the mobile app.
@@ -454,6 +601,43 @@ Lists all readings with question count (same shape as `GET /reading` but include
 Deletes a reading. Questions and options are cascade-deleted automatically.
 
 **Responses:** `200`, `400`, `404`
+
+---
+
+#### `POST /admin/listenings`
+Two-step flow for creating a listening exercise (audio must live in R2 first):
+
+**Step 1 — get an upload URL** (omit `audioKey` or pass `null`):
+```json
+{ "title": "Airport Announcement", "level": "easy", "duration_seconds": 90, "questions": [...] }
+```
+Returns `{ uploadUrl, audioKey }` — PUT the audio file directly to `uploadUrl` (presigned, 10 min TTL). No DB row is inserted yet.
+
+**Step 2 — create the record** (include the confirmed `audioKey`):
+```json
+{
+  "title": "Airport Announcement",
+  "audioKey": "listening/easy/<uuid>.webm",
+  "transcript": "Optional transcript text...",
+  "level": "easy",
+  "duration_seconds": 90,
+  "questions": [
+    {
+      "order": 0,
+      "text": "Where is the speaker?",
+      "type": "multiple_choice",
+      "explanation": "The speaker mentions 'gate 12'...",
+      "options": [
+        { "label": "A", "text": "Airport", "is_correct": true },
+        { "label": "B", "text": "Train station", "is_correct": false }
+      ]
+    }
+  ]
+}
+```
+- Exactly one option per question must have `is_correct: true` (Zod validated).
+
+**Response `201`:** `{ "id": 3, "message": "Listening created successfully" }`
 
 ---
 
@@ -554,6 +738,23 @@ levelToXpThreshold(lvl) // (lvl - 1)^2 * 100 — minimum XP to reach that level
 | `spendCoins(db, userId, amount)` | Deducts coins; no-ops and returns `success: false` if balance is insufficient | `{ coins, success }` |
 
 `awardUserXp` and `awardCoins` use `INSERT … ON CONFLICT DO UPDATE` so callers never need to pre-create the `user_stats` row.
+
+---
+
+### `src/lib/r2-audio.ts`
+Presigned URL helpers for Cloudflare R2. All functions accept an `R2Bucket` instance — always pass `c.env.AUDIO_BUCKET` from inside a handler, never at module level.
+
+| Function | What it does | Returns |
+|---|---|---|
+| `getAudioPresignUrl(r2, key, expiresIn=3600)` | Generates a presigned GET URL for a listening audio file | `Promise<string>` |
+| `getSpeakingUploadUrl(r2, userId, attemptId, expiresIn=600)` | Generates a presigned PUT URL for a speaking recording. Key pattern: `speaking/{userId}/{attemptId}.webm` | `Promise<{ uploadUrl, audioKey }>` — store `audioKey` in the submissions table |
+| `deleteAudio(r2, key)` | Deletes an object from the bucket (admin cleanup) | `Promise<void>` |
+
+```ts
+// Example usage in a route handler:
+const r2 = c.env.AUDIO_BUCKET;
+const { uploadUrl, audioKey } = await getSpeakingUploadUrl(r2, userId, attemptId);
+```
 
 ---
 

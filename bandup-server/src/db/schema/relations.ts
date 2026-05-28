@@ -3,6 +3,9 @@ import { users } from "./users";
 import { readings } from "./readings";
 import { questions, questionOptions } from "./questions";
 import { userReadingSubmissions } from "./submissions";
+import { listenings } from "./listenings";
+import { listeningQuestions, listeningQuestionOptions } from "./listening_questions";
+import { userListeningSubmissions } from "./listening_submissions";
 import { characters } from "./characters";
 import { userStats } from "./user_stats";
 import { quests, userQuests } from "./quests";
@@ -12,6 +15,7 @@ import { shopItems, userInventory } from "./shop";
 
 export const usersRelations = relations(users, ({ one, many }) => ({
   submissions: many(userReadingSubmissions),
+  listeningSubmissions: many(userListeningSubmissions),
   characters: many(characters),
   stats: one(userStats, {
     fields: [users.id],
@@ -80,6 +84,39 @@ export const userQuestsRelations = relations(userQuests, ({ one }) => ({
   quest: one(quests, {
     fields: [userQuests.questId],
     references: [quests.id],
+  }),
+}));
+
+// ─── Listening Relations ──────────────────────────────────────────────────────
+
+export const listeningsRelations = relations(listenings, ({ many }) => ({
+  questions: many(listeningQuestions),
+  submissions: many(userListeningSubmissions),
+}));
+
+export const listeningQuestionsRelations = relations(listeningQuestions, ({ one, many }) => ({
+  listening: one(listenings, {
+    fields: [listeningQuestions.listeningId],
+    references: [listenings.id],
+  }),
+  options: many(listeningQuestionOptions),
+}));
+
+export const listeningQuestionOptionsRelations = relations(listeningQuestionOptions, ({ one }) => ({
+  question: one(listeningQuestions, {
+    fields: [listeningQuestionOptions.questionId],
+    references: [listeningQuestions.id],
+  }),
+}));
+
+export const userListeningSubmissionsRelations = relations(userListeningSubmissions, ({ one }) => ({
+  user: one(users, {
+    fields: [userListeningSubmissions.userId],
+    references: [users.id],
+  }),
+  listening: one(listenings, {
+    fields: [userListeningSubmissions.listeningId],
+    references: [listenings.id],
   }),
 }));
 
