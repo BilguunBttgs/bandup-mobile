@@ -24,6 +24,11 @@
       "migrations_dir": "drizzle/migrations",
     },
   ],
+  "triggers": {
+    // 17:00 UTC = midnight Ulaanbaatar (UTC+8) — daily streak damage sweep
+    // 00:00 UTC Monday — weekly leaderboard snapshot
+    "crons": ["0 17 * * *", "0 0 * * 1"],
+  },
   "observability": {
     "logs": {
       "enabled": true,

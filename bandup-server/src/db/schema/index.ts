@@ -9,4 +9,5 @@ export * from "./characters";
 export * from "./user_stats";
 export * from "./quests";
 export * from "./shop";
+export * from "./leaderboard_snapshots";
 export * from "./relations";

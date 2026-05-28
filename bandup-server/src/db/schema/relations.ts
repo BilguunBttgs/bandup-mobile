@@ -10,6 +10,7 @@ import { characters } from "./characters";
 import { userStats } from "./user_stats";
 import { quests, userQuests } from "./quests";
 import { shopItems, userInventory } from "./shop";
+import { leaderboardSnapshots } from "./leaderboard_snapshots";
 
 // ─── Relations ────────────────────────────────────────────────────────────────
 
@@ -132,5 +133,12 @@ export const userInventoryRelations = relations(userInventory, ({ one }) => ({
   item: one(shopItems, {
     fields: [userInventory.itemId],
     references: [shopItems.id],
+  }),
+}));
+
+export const leaderboardSnapshotsRelations = relations(leaderboardSnapshots, ({ one }) => ({
+  user: one(users, {
+    fields: [leaderboardSnapshots.userId],
+    references: [users.id],
   }),
 }));

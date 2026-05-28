@@ -59,14 +59,15 @@ src/lib/                      — Shared utilities (auth, password, band score)
 
 ```
 src/
-├── index.tsx                          # App entry — registers global error handler + 5 route groups
+├── index.tsx                          # App entry — registers route groups + exports scheduled cron handler
 ├── renderer.tsx                       # JSX layout wrapper (Hono JSX, NOT React)
 ├── style.css                          # Global stylesheet
 │
 ├── db/
 │   ├── index.ts                       # createDb(d1) — creates a Drizzle client from a D1 binding
 │   ├── seeds/
-│   │   └── quests.sql                 # 10 starter quests; run with wrangler d1 execute --file
+│   │   ├── quests.sql                 # 10 starter quests; run with wrangler d1 execute --file
+│   │   └── shop_items.sql             # 6 starter shop items (2 boosters + 4 skins); same run pattern
 │   └── schema/
 │       ├── index.ts                   # Re-exports all tables + relations
 │       ├── users.ts                   # users table
@@ -80,6 +81,7 @@ src/
 │       ├── user_stats.ts              # user_stats table (XP, coins, streak — one row per user)
 │       ├── quests.ts                  # quests (templates) + user_quests (daily progress) tables
 │       ├── shop.ts                    # shop_items + user_inventory tables
+│       ├── leaderboard_snapshots.ts   # leaderboard_snapshots table (weekly top-10 cron)
 │       └── relations.ts               # Drizzle relation definitions (for relational queries)
 │
 ├── routes/
@@ -87,6 +89,7 @@ src/
 │   ├── reading.ts                     # /reading/* — requires JWT
 │   ├── listening.ts                   # /listening/* — requires JWT
 │   ├── game.ts                        # /game/* — requires JWT (player state, checkin, revive, leaderboard)
+│   ├── shop.ts                        # /shop/* — requires JWT (items, inventory, buy, equip)
 │   └── admin.ts                       # /admin/* — requires X-Admin-Key header
 │
 ├── controllers/
@@ -106,6 +109,11 @@ src/
 │   │   ├── checkin.controller.ts      # POST /game/checkin (streak + daily quest generation)
 │   │   ├── revive.controller.ts       # POST /game/revive (50-coin character restore)
 │   │   └── leaderboard.controller.ts  # GET /game/leaderboard (top 20 by totalXp)
+│   ├── shop/
+│   │   ├── listItems.controller.ts    # GET /shop/items (isAvailable=true)
+│   │   ├── inventory.controller.ts    # GET /shop/inventory (user_inventory joined with shop_items)
+│   │   ├── buy.controller.ts          # POST /shop/buy (spendCoins + insert inventory; 24h TTL for boosters)
+│   │   └── equip.controller.ts        # POST /shop/equip (cosmetics only; unequip same-type others)
 │   └── admin/
 │       ├── createReading.controller.ts   # POST /admin/readings (reading + questions + options in one TX)
 │       ├── listReadings.controller.ts    # GET /admin/readings
@@ -351,6 +359,20 @@ One row per user (unique constraint on `userId`). Tracks lifetime economy state.
 | `purchasedAt` | timestamp | Unix epoch; DB default `unixepoch()` |
 | `expiresAt` | timestamp? | Null = permanent; set for time-limited boosters |
 | `isEquipped` | boolean | App code must enforce at-most-one equipped per slot; default `false` |
+
+---
+
+### `leaderboard_snapshots` (`src/db/schema/leaderboard_snapshots.ts`)
+Weekly top-10 snapshot written by the Monday cron. One row per user per snapshot date.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | integer PK | Auto-increment |
+| `snapshotDate` | text | ISO date `YYYY-MM-DD` of the Monday the snapshot was taken |
+| `userId` | integer FK → users.id | CASCADE delete |
+| `rank` | integer | 1–10 |
+| `totalXp` | integer | XP at snapshot time |
+| `createdAt` | timestamp | Unix epoch |
 
 ---
 
@@ -827,6 +849,23 @@ const { uploadUrl, audioKey } = await getSpeakingUploadUrl(r2, userId, attemptId
 
 ---
 
+## Cron Triggers
+
+Two cron schedules are configured in `wrangler.jsonc` under `triggers.crons`. The handler is the `scheduled` export in `src/index.tsx` (the default export is `{ fetch, scheduled }` — not bare `app`).
+
+| Cron | UTC time | What it does |
+|---|---|---|
+| `0 17 * * *` | 17:00 daily | Midnight Ulaanbaatar (UTC+8): runs `applyMissedStreakDamage` — resets streaks and deals HP damage to all users who had no activity yesterday |
+| `0 0 * * 1` | 00:00 Monday | Weekly leaderboard snapshot: queries top 10 by `totalXp`, deletes any existing snapshot for that date (idempotent), inserts new rows into `leaderboard_snapshots` |
+
+**Testing locally:**
+```bash
+# Trigger a specific cron via the Miniflare REST API (while dev server is running)
+curl "http://localhost:8787/__scheduled?cron=0+17+*+*+*"
+```
+
+---
+
 ## Conventions & patterns
 
 - **Accessing the DB**: always `createDb(c.env.DB)` inside a handler — never at module level (Workers are stateless per-request).
@@ -854,6 +893,5 @@ const { uploadUrl, audioKey } = await getSpeakingUploadUrl(r2, userId, attemptId
 - `POST /auth/refresh` — token refresh endpoint
 - Onboarding flow endpoints (step progression, score submission)
 - Speaking / Writing exercise routes (same pattern as reading/listening)
-- Shop routes: browse items (`GET /shop`), purchase (`POST /shop/buy`), equip (`POST /shop/equip`)
-- Cron handler for `applyMissedStreakDamage` (scheduled daily via Cloudflare Cron Triggers)
+- `GET /game/leaderboard/history` — surface past weekly snapshots from `leaderboard_snapshots`
 - GraphQL layer (`graphql` package is installed, not wired up yet)
