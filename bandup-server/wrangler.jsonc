@@ -1,38 +1,41 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "bandup-server",
-  "compatibility_date": "2025-08-03",
-  "main": "./src/index.tsx",
-  // ⚠️  LOCAL DEV ONLY — these plaintext vars are used when @cloudflare/vite-plugin
-  // fails to inject .dev.vars into the worker binding context.
-  // For production: run `wrangler secret put JWT_SECRET` (encrypted secret overrides vars).
-  "vars": {
-    "JWT_SECRET": "dev-jwt-secret-change-for-production",
-    "ADMIN_API_KEY": "dev-admin-key-change-for-production",
-  },
-  "r2_buckets": [
-    {
-      "binding": "AUDIO_BUCKET",
-      "bucket_name": "bandup-audio",
-    },
-  ],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "bandup-db",
-      "database_id": "a18650ed-4a94-42d6-96ca-81754ca06510",
-      "migrations_dir": "drizzle/migrations",
-    },
-  ],
-  "triggers": {
-    // 17:00 UTC = midnight Ulaanbaatar (UTC+8) — daily streak damage sweep
-    // 00:00 UTC Monday — weekly leaderboard snapshot
-    "crons": ["0 17 * * *", "0 0 * * 1"],
-  },
-  "observability": {
-    "logs": {
-      "enabled": true,
-      "invocation_logs": true,
-    },
-  },
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "bandup-server",
+	"compatibility_date": "2025-08-03",
+	"main": "./src/index.tsx",
+	// SECURITY FIX: Never commit secret material — even as "dev defaults" — to the
+	// repository. `vars` is plaintext and visible to anyone with repo access, and a
+	// forgotten `wrangler secret put` step would silently promote these values to
+	// production. Local dev secrets live in `.dev.vars` (gitignored); production
+	// secrets MUST be set via `wrangler secret put JWT_SECRET` and
+	// `wrangler secret put ADMIN_API_KEY`. The Worker will fail closed at request
+	// time if either is missing — that is the desired behavior.
+	"r2_buckets": [
+		{
+			"binding": "AUDIO_BUCKET",
+			"bucket_name": "bandup-audio",
+		},
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "bandup-db",
+			"database_id": "a18650ed-4a94-42d6-96ca-81754ca06510",
+			"migrations_dir": "drizzle/migrations",
+		},
+	],
+	"triggers": {
+		// 17:00 UTC = midnight Ulaanbaatar (UTC+8) — daily streak damage sweep
+		// 00:00 UTC Monday — weekly leaderboard snapshot
+		"crons": [
+			"0 17 * * *",
+			"0 0 * * 1"
+		],
+	},
+	"observability": {
+		"logs": {
+			"enabled": true,
+			"invocation_logs": true,
+		},
+	},
 }

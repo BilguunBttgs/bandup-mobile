@@ -40,16 +40,26 @@ const questionSchema = z.object({
     }),
 });
 
+// SECURITY FIX: Step-1 (presigned PUT URL minting) and Step-2 (DB insert) have
+// genuinely different required fields. Allowing the original
+// "questions is always required" schema to also gate Step-1 means callers must
+// send a fully-formed payload just to get an upload URL, which encourages
+// loosely-validated client implementations. Conversely, allowing
+// `questions: []` in Step-2 would let admins create listenings without
+// questions. We keep one schema but make `level` the only field Step-1 needs.
+// Step-2 specific invariants (questions, audioKey present) are enforced inside
+// the handler.
 export const createListeningSchema = z.object({
-  title: z.string().min(1).max(200),
+  title: z.string().min(1).max(200).optional(),
   // Omit audioKey (or pass null) to receive a presigned PUT URL instead of inserting.
   audioKey: z.string().min(1).nullable().optional(),
   transcript: z.string().optional(),
   level: z.enum(["easy", "medium", "hard"]),
-  duration_seconds: z.number().int().positive(),
+  duration_seconds: z.number().int().positive().optional(),
   questions: z
     .array(questionSchema)
-    .min(1, "A listening must have at least one question"),
+    .min(1, "A listening must have at least one question")
+    .optional(),
 });
 
 type CreateListeningInput = z.infer<typeof createListeningSchema>;
@@ -76,21 +86,37 @@ export async function createListeningController(
   }
 
   // ── Step 2: audioKey provided — insert the record ────────────────────────────
+  // SECURITY FIX: Enforce Step-2 invariants now that the Zod schema marks them
+  // optional (so Step-1 doesn't require a full payload). Without these checks,
+  // an admin caller with the API key could create a half-baked listening row
+  // (no title, no questions, etc.) — defense-in-depth for the data plane.
+  if (
+    !body.title ||
+    !body.duration_seconds ||
+    !body.questions ||
+    body.questions.length === 0
+  ) {
+    return c.json(
+      { error: "title, duration_seconds, and questions are required to create the record" },
+      400,
+    );
+  }
+
   const db = createDb(c.env.DB);
 
   const newListeningId = await db.transaction(async (tx) => {
     const [newListening] = await tx
       .insert(listenings)
       .values({
-        title: body.title,
+        title: body.title!,
         audioKey: body.audioKey!,
         transcript: body.transcript ?? null,
         level: body.level,
-        durationSeconds: body.duration_seconds,
+        durationSeconds: body.duration_seconds!,
       })
       .returning({ id: listenings.id });
 
-    for (const q of body.questions) {
+    for (const q of body.questions!) {
       const [newQuestion] = await tx
         .insert(listeningQuestions)
         .values({

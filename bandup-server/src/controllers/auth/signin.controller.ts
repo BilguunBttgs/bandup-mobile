@@ -32,12 +32,19 @@ export async function signinController(
     )
     .limit(1);
 
-  if (!user) {
-    return c.json(mongoError("AUTH_NOT_FOUND"), 404);
-  }
-
-  const passwordMatch = await verifyPassword(password, user.password);
-  if (!passwordMatch) {
+  // SECURITY FIX: Username/email enumeration. Returning 404 for "not found" and
+  // 401 for "wrong password" lets an attacker probe which accounts exist.
+  // Always return the same generic 401 + run verifyPassword against a fixed
+  // dummy hash so the timing of "no such user" matches "wrong password".
+  const DUMMY_HASH =
+    // base64(zero salt || zero derived key) — verifyPassword always fails but
+    // performs the same PBKDF2 work, normalizing response time.
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+  const passwordMatch = await verifyPassword(
+    password,
+    user ? user.password : DUMMY_HASH,
+  );
+  if (!user || !passwordMatch) {
     return c.json(mongoError("AUTH_INVALID"), 401);
   }
 

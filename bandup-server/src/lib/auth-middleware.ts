@@ -36,6 +36,13 @@ export const authMiddleware = createMiddleware<{
 
   const token = authHeader.slice(7); // strip "Bearer "
 
+  // SECURITY FIX: Fail closed if JWT_SECRET is missing or empty. Without this
+  // check, an unconfigured secret would cause `verify()` to throw and surface as
+  // a generic 401, masking a serious deployment misconfiguration.
+  if (!c.env.JWT_SECRET) {
+    return c.json(mongoError("AUTH_INVALID_TOKEN"), 401);
+  }
+
   try {
     // verify() from hono/jwt uses Web Crypto API (Cloudflare Workers compatible).
     // It validates the signature and checks exp automatically.
@@ -45,7 +52,22 @@ export const authMiddleware = createMiddleware<{
       exp: number;
     };
 
-    c.set("userId", Number(payload.sub));
+    // SECURITY FIX: Validate JWT payload shape. A token signed with our secret
+    // but containing a non-numeric `sub` would otherwise let the request through
+    // with userId=NaN, which silently returns empty result sets instead of
+    // failing hard. Treat malformed payloads as invalid tokens.
+    const userId = Number(payload?.sub);
+    if (
+      !payload ||
+      typeof payload.sub !== "string" ||
+      !Number.isInteger(userId) ||
+      userId <= 0 ||
+      typeof payload.username !== "string"
+    ) {
+      return c.json(mongoError("AUTH_INVALID_TOKEN"), 401);
+    }
+
+    c.set("userId", userId);
     c.set("username", payload.username);
   } catch {
     return c.json(mongoError("AUTH_INVALID_TOKEN"), 401);

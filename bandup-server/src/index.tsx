@@ -16,10 +16,15 @@ const app = new Hono<{ Bindings: CloudflareBindings }>();
 
 // ── Global error handler ────────────────────────────────────────────────────
 // Catches any unhandled exception in route handlers and returns JSON instead
-// of an opaque 500, making debugging from the mobile client much easier.
+// of an opaque 500.
+// SECURITY FIX: Do not echo `err.message` to the client — runtime errors
+// (Drizzle SQL failures, JSON parse errors, internal stack hints, etc.) can
+// leak schema details, secret values from interpolated strings, or attack
+// surface. The full error is logged server-side; clients get only the generic
+// Mongolian error message.
 app.onError((err, c) => {
   console.error(`[${c.req.method}] ${c.req.url}`, err);
-  return c.json({ ...mongoError("INTERNAL_ERROR"), detail: err.message }, 500);
+  return c.json(mongoError("INTERNAL_ERROR"), 500);
 });
 
 app.use(renderer);
