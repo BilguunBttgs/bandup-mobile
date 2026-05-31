@@ -36,9 +36,10 @@ export async function apiFetch<T>(
   })
 
   if (!res.ok) {
-    const data = await res
-      .json()
-      .catch(() => ({})) as { error?: string; coins?: number }
+    const data = (await res.json().catch(() => ({}))) as {
+      error?: string
+      coins?: number
+    }
     throw new ApiError(res.status, data.error ?? "Request failed", data.coins)
   }
 

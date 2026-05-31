@@ -62,7 +62,9 @@ function LoginForm() {
       setAuth(res.token, res.user)
       router.replace(res.user.isOnboarding ? "/onboarding" : "/")
     } catch (err) {
-      setServerError(err instanceof ApiError ? err.message : "Something went wrong")
+      setServerError(
+        err instanceof ApiError ? err.message : "Something went wrong"
+      )
     }
   }
 
@@ -125,7 +127,9 @@ function SignupForm({ onSuccess }: { onSuccess: () => void }) {
       await authApi.signup(values)
       onSuccess()
     } catch (err) {
-      setServerError(err instanceof ApiError ? err.message : "Something went wrong")
+      setServerError(
+        err instanceof ApiError ? err.message : "Something went wrong"
+      )
     }
   }
 
