@@ -1,9 +1,8 @@
 import type { Context } from "hono";
 import { z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
-import { users, questions, questionOptions, characters, userStats } from "../../db/schema";
-import { calculateBandScore } from "../../lib/band-score";
+import { users, characters, userStats } from "../../db/schema";
 import { generateDailyQuests } from "../../lib/quest-engine";
 import { mongoError } from "../../lib/errors";
 
@@ -21,16 +20,13 @@ const step1DataSchema = z.object({
   daily_goal_minutes: z.number().int().min(5).max(480),
 });
 
+// Self-assessed band per skill (0–9, 0.5 increments)
+const bandSchema = z.number().min(0).max(9).multipleOf(0.5);
 const step2DataSchema = z.object({
-  reading_id: z.number().int().positive(),
-  answers: z
-    .array(
-      z.object({
-        question_id: z.number().int().positive(),
-        option_id: z.number().int().positive(),
-      }),
-    )
-    .min(1, "At least one answer is required"),
+  reading: bandSchema,
+  listening: bandSchema,
+  writing: bandSchema,
+  speaking: bandSchema,
 });
 
 type OnboardingEnv = {
@@ -93,58 +89,30 @@ export async function onboardingStepController(
     });
   }
 
-  // ── Step 2: short placement test ──────────────────────────────────────────
+  // ── Step 2: self-assessed level per skill ─────────────────────────────────
   if (step === 2) {
     const parsed = step2DataSchema.safeParse(data);
     if (!parsed.success) {
       return c.json({ error: parsed.error.issues[0]?.message ?? mongoError("VALIDATION_ERROR").error }, 400);
     }
 
-    const { reading_id, answers } = parsed.data;
-
-    // Fetch all questions in this reading — totalQuestions comes from DB (anti-cheat)
-    const readingQuestions = await db
-      .select({ id: questions.id })
-      .from(questions)
-      .where(eq(questions.readingId, reading_id));
-
-    const totalQuestions = readingQuestions.length;
-    if (totalQuestions === 0) {
-      return c.json(mongoError("NO_QUESTIONS"), 422);
-    }
-
-    const qIds = readingQuestions.map((q) => q.id);
-    const correctOptions = await db
-      .select({ id: questionOptions.id, questionId: questionOptions.questionId })
-      .from(questionOptions)
-      .where(
-        and(
-          inArray(questionOptions.questionId, qIds),
-          eq(questionOptions.isCorrect, true),
-        ),
-      );
-
-    const correctMap = new Map<number, number>(); // questionId → correct optionId
-    for (const opt of correctOptions) {
-      correctMap.set(opt.questionId, opt.id);
-    }
-
-    let correctCount = 0;
-    for (const answer of answers) {
-      if (correctMap.get(answer.question_id) === answer.option_id) correctCount++;
-    }
-
-    const bandScore = calculateBandScore(correctCount, totalQuestions);
+    const { reading, listening, writing, speaking } = parsed.data;
 
     await db
       .update(users)
-      .set({ readingScore: bandScore, onboardingStep: 3 })
+      .set({
+        readingScore: reading,
+        listeningScore: listening,
+        writingScore: writing,
+        speakingScore: speaking,
+        onboardingStep: 3,
+      })
       .where(eq(users.id, userId));
 
     return c.json({
       step: 2,
       nextStep: 3,
-      data: { correct_count: correctCount, total_questions: totalQuestions, band_score: bandScore },
+      data: { reading, listening, writing, speaking },
     });
   }
 

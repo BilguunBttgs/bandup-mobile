@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
-import { userStats, characters } from "../../db/schema";
+import { users, userStats, characters } from "../../db/schema";
 import { getTodayQuests } from "../../lib/quest-engine";
 
 const ALL_SKILLS = ["reading", "listening", "writing", "speaking"] as const;
@@ -52,6 +52,18 @@ export async function gameStateController(c: Context<GameEnv>): Promise<Response
       ? await db.select().from(characters).where(eq(characters.userId, userId))
       : existingChars;
 
+  // ── Self-assessed band score per skill (set during onboarding) ─────────────
+  const [bands] = await db
+    .select({
+      reading: users.readingScore,
+      listening: users.listeningScore,
+      writing: users.writingScore,
+      speaking: users.speakingScore,
+    })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
   // ── Today's quests ────────────────────────────────────────────────────────
   const dateIso = new Date().toISOString().slice(0, 10);
   const quests = await getTodayQuests(db, userId, dateIso);
@@ -65,6 +77,7 @@ export async function gameStateController(c: Context<GameEnv>): Promise<Response
       level: ch.level,
       isAlive: ch.isAlive,
       skinId: ch.skinId,
+      bandScore: bands?.[ch.skill as Skill] ?? null,
     })),
     quests: quests.map((q) => ({
       id: q.id,

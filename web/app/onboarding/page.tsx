@@ -1,11 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft } from "@phosphor-icons/react"
 import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/auth"
-import { authApi, type ReadingDetail } from "@/lib/auth-api"
+import { authApi } from "@/lib/auth-api"
 import { ApiError } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -17,7 +17,7 @@ type Msg = {
   text: string
 }
 
-type Phase = "init" | "letsgo" | "band" | "goal" | "placement" | "done"
+type Phase = "init" | "letsgo" | "band" | "goal" | "level" | "done"
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -29,6 +29,24 @@ const GOAL_CHOICES = [
   { label: "30 min / day", value: 30 },
   { label: "45 min / day", value: 45 },
   { label: "60 min / day", value: 60 },
+]
+
+const SKILLS = [
+  { key: "reading", label: "Reading" },
+  { key: "listening", label: "Listening" },
+  { key: "writing", label: "Writing" },
+  { key: "speaking", label: "Speaking" },
+] as const
+
+type SkillKey = (typeof SKILLS)[number]["key"]
+
+// Self-rated level → IELTS band (0–9, 0.5 steps)
+const LEVEL_CHOICES = [
+  { label: "Beginner", band: 4.0 },
+  { label: "Elementary", band: 5.0 },
+  { label: "Intermediate", band: 6.0 },
+  { label: "Advanced", band: 7.0 },
+  { label: "Expert", band: 8.0 },
 ]
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
@@ -84,66 +102,30 @@ function UserMsg({ text }: { text: string }) {
   )
 }
 
-// ── Placement card ─────────────────────────────────────────────────────────
+// ── Skill self-rating card ───────────────────────────────────────────────────
 
-type PlacementResult = {
-  reading_id: number
-  answers: { question_id: number; option_id: number }[]
-}
+type SkillRatings = Record<SkillKey, number>
 
-function PlacementCard({
-  token,
+function SkillRatingCard({
   onSubmit,
 }: {
-  token: string
-  onSubmit: (data: PlacementResult) => Promise<void>
+  onSubmit: (data: SkillRatings) => Promise<void>
 }) {
-  const [reading, setReading] = useState<ReadingDetail | null>(null)
-  const [loadError, setLoadError] = useState("")
+  const [ratings, setRatings] = useState<Partial<SkillRatings>>({})
   const [submitError, setSubmitError] = useState("")
-  const [answers, setAnswers] = useState<Record<number, number>>({})
   const [submitting, setSubmitting] = useState(false)
-  const fetched = useRef(false)
 
-  const load = useCallback(async () => {
-    setLoadError("")
-    try {
-      const list = await authApi.getReadings(token, "easy")
-      if (!list.length) {
-        setLoadError("No placement readings available.")
-        return
-      }
-      const detail = await authApi.getReading(token, list[0].id)
-      setReading(detail)
-    } catch (err) {
-      setLoadError(
-        err instanceof ApiError ? err.message : "Failed to load reading"
-      )
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (fetched.current) return
-    fetched.current = true
-    load()
-  }, [load])
+  const allRated = SKILLS.every((s) => ratings[s.key] !== undefined)
 
   async function handleSubmit() {
-    if (!reading) return
-    if (reading.questions.some((q) => answers[q.id] === undefined)) {
-      setSubmitError("Please answer all questions.")
+    if (!allRated) {
+      setSubmitError("Please rate every skill.")
       return
     }
     setSubmitError("")
     setSubmitting(true)
     try {
-      await onSubmit({
-        reading_id: reading.id,
-        answers: reading.questions.map((q) => ({
-          question_id: q.id,
-          option_id: answers[q.id],
-        })),
-      })
+      await onSubmit(ratings as SkillRatings)
     } catch (err) {
       setSubmitError(
         err instanceof ApiError ? err.message : "Something went wrong"
@@ -152,73 +134,32 @@ function PlacementCard({
     }
   }
 
-  if (loadError) {
-    return (
-      <div className="space-y-2">
-        <p className="text-xs text-destructive">{loadError}</p>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            fetched.current = false
-            load()
-          }}
-        >
-          Retry
-        </Button>
-      </div>
-    )
-  }
-
-  if (!reading) {
-    return (
-      <div className="flex items-center gap-2 py-1">
-        <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-        <span className="text-xs text-muted-foreground">Loading test…</span>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-3">
-      <div className="max-h-36 overflow-y-auto rounded-lg border bg-background/40 p-3 text-xs leading-relaxed">
-        {reading.passage}
-      </div>
-
-      <div className="space-y-3">
-        {reading.questions
-          .slice()
-          .sort((a, b) => a.order - b.order)
-          .map((q, qi) => (
-            <div key={q.id} className="space-y-1.5">
-              <p className="text-xs font-medium">
-                {qi + 1}. {q.text}
-              </p>
-              <div className="space-y-1">
-                {q.options.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() =>
-                      setAnswers((p) => ({ ...p, [q.id]: opt.id }))
-                    }
-                    className={cn(
-                      "flex w-full gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors",
-                      answers[q.id] === opt.id
-                        ? "border-primary bg-primary/10 text-primary"
-                        : "border-border hover:bg-muted/50"
-                    )}
-                  >
-                    <span className="shrink-0 font-mono font-medium">
-                      {opt.label}
-                    </span>
-                    <span>{opt.text}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-      </div>
+      {SKILLS.map((skill) => (
+        <div key={skill.key} className="space-y-1.5">
+          <p className="text-xs font-medium">{skill.label}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {LEVEL_CHOICES.map((lvl) => (
+              <button
+                key={lvl.label}
+                type="button"
+                onClick={() =>
+                  setRatings((p) => ({ ...p, [skill.key]: lvl.band }))
+                }
+                className={cn(
+                  "rounded-md border px-2.5 py-1.5 text-xs transition-colors",
+                  ratings[skill.key] === lvl.band
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border hover:bg-muted/50"
+                )}
+              >
+                {lvl.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {submitError && <p className="text-xs text-destructive">{submitError}</p>}
 
@@ -228,7 +169,7 @@ function PlacementCard({
         onClick={handleSubmit}
         disabled={submitting}
       >
-        {submitting ? "Submitting…" : "Submit answers"}
+        {submitting ? "Saving…" : "Save my level"}
       </Button>
     </div>
   )
@@ -284,11 +225,11 @@ export default function OnboardingPage() {
       setPhase("goal")
     } else if (step === 2) {
       await bilguunSays(
-        "place_q",
-        "Last step — here's a quick reading test to find your level.",
+        "level_q",
+        "Last step — how would you rate your current English level?",
         700
       )
-      setPhase("placement")
+      setPhase("level")
     }
   }
 
@@ -341,17 +282,17 @@ export default function OnboardingPage() {
       await advance(1, { daily_goal_minutes: minutes })
       initialStep.current = 2
       await bilguunSays(
-        "place_q",
-        "Perfect! Last step — here's a quick reading test to find your level.",
+        "level_q",
+        "Perfect! Last step — how would you rate your current English level?",
         800
       )
-      setPhase("placement")
+      setPhase("level")
     } catch {
       setPhase("goal")
     }
   }
 
-  async function handlePlacementDone(data: PlacementResult) {
+  async function handleLevelDone(data: SkillRatings) {
     setPhase("init")
     try {
       await advance(2, data)
@@ -362,7 +303,7 @@ export default function OnboardingPage() {
       )
       setPhase("done")
     } catch {
-      setPhase("placement")
+      setPhase("level")
     }
   }
 
@@ -410,114 +351,112 @@ export default function OnboardingPage() {
   if (!_hasHydrated || !token || !user) return null
 
   return (
-    <div className="bg-secondary flex justify-center items-center h-svh">
-      <div className="flex h-svh max-h-[800px] flex-col bg-background max-w-sm w-full border overflow-hidden shadow-2xl rounded-2xl">
-        {/* Header */}
-        <div className="flex items-center gap-3 border-b bg-card px-4 py-3">
-          <button
-            type="button"
-            onClick={() => {
-              clearAuth()
-              router.replace("/auth")
-            }}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ArrowLeft size={20} />
-          </button>
+    <div className="flex h-full flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-3 border-b bg-card px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            clearAuth()
+            router.replace("/auth")
+          }}
+          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ArrowLeft size={20} />
+        </button>
 
-          <BAvatar size="md" />
+        <BAvatar size="md" />
 
-          <div>
-            <p className="text-sm font-semibold">Bilguun</p>
-            <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              <p className="text-xs text-muted-foreground">
-                Your English teacher
-              </p>
-            </div>
+        <div>
+          <p className="text-sm font-semibold">Bilguun</p>
+          <div className="flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            <p className="text-xs text-muted-foreground">
+              Your English teacher
+            </p>
           </div>
         </div>
+      </div>
 
-        {/* Messages */}
-        <div
-          ref={scrollRef}
-          className="flex-1 space-y-3 overflow-y-auto px-4 py-5"
-        >
-          {msgs.map((m) =>
-            m.from === "bilguun" ? (
-              <BilguunMsg key={m.id} text={m.text} />
-            ) : (
-              <UserMsg key={m.id} text={m.text} />
-            )
-          )}
+      {/* Messages */}
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-3 overflow-y-auto px-4 py-5"
+      >
+        {msgs.map((m) =>
+          m.from === "bilguun" ? (
+            <BilguunMsg key={m.id} text={m.text} />
+          ) : (
+            <UserMsg key={m.id} text={m.text} />
+          )
+        )}
 
-          {isTyping && <TypingDots />}
+        {isTyping && <TypingDots />}
 
-          {/* Placement card renders inline in the conversation */}
-          {phase === "placement" && token && (
-            <div className="flex items-start gap-2">
-              <BAvatar />
-              <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted p-4">
-                <PlacementCard token={token} onSubmit={handlePlacementDone} />
-              </div>
+        {/* Skill self-rating card renders inline in the conversation */}
+        {phase === "level" && (
+          <div className="flex items-start gap-2">
+            <BAvatar />
+            <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted p-4">
+              <SkillRatingCard onSubmit={handleLevelDone} />
             </div>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* Bottom input area */}
-        <div className="border-t bg-card px-4 py-4">
-          {phase === "letsgo" && (
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleLetsGo}
-                className="rounded-2xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 active:opacity-80"
-              >
-                Let&apos;s go 🚀
-              </button>
-            </div>
-          )}
-
-          {phase === "band" && (
-            <div className="flex flex-wrap justify-end gap-2">
-              {BAND_CHOICES.map((b) => (
-                <button
-                  key={b}
-                  type="button"
-                  onClick={() => handleBandSelect(b)}
-                  className="rounded-full border border-primary px-4 py-1.5 text-sm text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                >
-                  Band {b.toFixed(1)}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {phase === "goal" && (
-            <div className="flex flex-wrap justify-end gap-2">
-              {GOAL_CHOICES.map((g) => (
-                <button
-                  key={g.value}
-                  type="button"
-                  onClick={() => handleGoalSelect(g.value)}
-                  className="rounded-full border border-primary px-4 py-1.5 text-sm text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
-                >
-                  {g.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {phase === "done" && (
-            <Button
-              className="w-full"
-              onClick={handleFinish}
-              disabled={finishSubmitting}
+      {/* Bottom input area */}
+      <div className="border-t bg-card px-4 py-4">
+        {phase === "letsgo" && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleLetsGo}
+              className="rounded-2xl bg-primary px-6 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 active:opacity-80"
             >
-              {finishSubmitting ? "Starting…" : "Start learning"}
-            </Button>
-          )}
-        </div>
+              Let&apos;s go 🚀
+            </button>
+          </div>
+        )}
+
+        {phase === "band" && (
+          <div className="flex flex-wrap justify-end gap-2">
+            {BAND_CHOICES.map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => handleBandSelect(b)}
+                className="rounded-full border border-primary px-4 py-1.5 text-sm text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                Band {b.toFixed(1)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {phase === "goal" && (
+          <div className="flex flex-wrap justify-end gap-2">
+            {GOAL_CHOICES.map((g) => (
+              <button
+                key={g.value}
+                type="button"
+                onClick={() => handleGoalSelect(g.value)}
+                className="rounded-full border border-primary px-4 py-1.5 text-sm text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                {g.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {phase === "done" && (
+          <Button
+            className="w-full"
+            onClick={handleFinish}
+            disabled={finishSubmitting}
+          >
+            {finishSubmitting ? "Starting…" : "Start learning"}
+          </Button>
+        )}
       </div>
     </div>
   )

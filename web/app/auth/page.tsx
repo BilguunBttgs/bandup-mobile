@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { useAuthStore } from "@/store/auth"
 import { authApi } from "@/lib/auth-api"
 import { ApiError } from "@/lib/api"
+import Image from "next/image"
 
 const pinSchema = z
   .string()
@@ -201,13 +202,21 @@ export default function AuthPage() {
   if (!_hasHydrated || (token && user)) return null
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
+    <div className="flex h-full items-center justify-center overflow-y-auto bg-muted/30 p-4">
       <div className="w-full max-w-sm space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">BandUp</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your IELTS preparation companion
-          </p>
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">BandUp</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your IELTS preparation companion
+            </p>
+          </div>
+          <Image
+            src="/assets/bandup-mascot.png"
+            alt="BandUp"
+            width={100}
+            height={100}
+          />
         </div>
 
         <Card>
