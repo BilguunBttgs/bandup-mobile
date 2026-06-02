@@ -111,3 +111,64 @@ VALUES
     'Аль ч ур чадварын арван дасгал дуусга.',
     'any', 10, 500, 100, 1
   );
+
+-- ── Extra pool (more variety) ───────────────────────────────────────────────────
+
+-- Reading
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '5 уншилт хий',
+    'Өнөөдөр таван уншилтын дасгал дуусга.',
+    'reading', 5, 250, 50, 1
+  );
+
+-- Listening
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '5 сонсолт хий',
+    'Өнөөдөр таван сонсолтын дасгал дуусга.',
+    'listening', 5, 250, 50, 1
+  );
+
+-- Writing
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '3 бичлэг хий',
+    'Өнөөдөр гурван бичлэгийн дасгал дуусга.',
+    'writing', 3, 180, 36, 1
+  );
+
+-- Speaking
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '3 ярилт хий',
+    'Өнөөдөр гурван ярилтын дасгал дуусга.',
+    'speaking', 3, 180, 36, 1
+  );
+
+-- Any
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    'Идэвхтэй өдөр',
+    'Өнөөдөр аль ч ур чадварын хоёр дасгал дуусга.',
+    'any', 2, 60, 12, 1
+  );
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    'Долоон дасгал',
+    'Аль ч ур чадварын долоон дасгал дуусга.',
+    'any', 7, 350, 70, 1
+  );

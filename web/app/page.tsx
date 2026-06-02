@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   BookOpen,
+  CheckCircle,
   Coins,
   Fire,
   Headphones,
@@ -15,7 +16,7 @@ import {
   type Icon,
 } from "@phosphor-icons/react"
 import { useAuthStore } from "@/store/auth"
-import { gameApi, type GameState, type Skill } from "@/lib/game-api"
+import { gameApi, type GameState, type Quest, type Skill } from "@/lib/game-api"
 import { ApiError } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
@@ -90,20 +91,27 @@ function CharacterCard({
   level,
   isAlive,
   bandScore,
+  onClick,
 }: {
   skill: Skill
   hp: number
   level: number
   isAlive: boolean
   bandScore: number | null
+  onClick?: () => void
 }) {
   const meta = SKILL_META[skill]
   const { Icon: SkillIcon } = meta
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
       className={cn(
-        "flex flex-col items-center gap-2 rounded-2xl border bg-card p-4",
+        "flex flex-col items-center gap-2 rounded-2xl border bg-card p-4 text-center transition-colors",
+        onClick && "hover:bg-muted/50 active:bg-muted",
+        !onClick && "cursor-default",
         !isAlive && "opacity-60"
       )}
     >
@@ -155,6 +163,65 @@ function CharacterCard({
           <div
             className={cn("h-full rounded-full transition-all", hpColor(hp))}
             style={{ width: `${Math.max(0, Math.min(100, hp))}%` }}
+          />
+        </div>
+      </div>
+    </button>
+  )
+}
+
+// ── Quest item ────────────────────────────────────────────────────────────────
+
+function QuestItem({ quest }: { quest: Quest }) {
+  const pct =
+    quest.requiredCount > 0
+      ? Math.min(100, (quest.progress / quest.requiredCount) * 100)
+      : 0
+
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border bg-card p-4",
+        quest.isCompleted && "opacity-70"
+      )}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            {quest.isCompleted && (
+              <CheckCircle size={16} weight="fill" className="text-green-500" />
+            )}
+            {quest.titleMn}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {quest.descriptionMn}
+          </p>
+        </div>
+
+        <div className="flex shrink-0 flex-col items-end gap-1 text-[11px] font-semibold">
+          <span className="flex items-center gap-0.5 text-violet-500">
+            <Lightning size={13} weight="fill" />+{quest.xpReward}
+          </span>
+          <span className="flex items-center gap-0.5 text-amber-500">
+            <Coins size={13} weight="fill" />+{quest.coinReward}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
+          <span>Progress</span>
+          <span className="tabular-nums">
+            {quest.progress}/{quest.requiredCount}
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all",
+              quest.isCompleted ? "bg-green-500" : "bg-primary"
+            )}
+            style={{ width: `${pct}%` }}
           />
         </div>
       </div>
@@ -264,10 +331,27 @@ export default function DashboardPage() {
                   level={ch?.level ?? 1}
                   isAlive={ch?.isAlive ?? true}
                   bandScore={ch?.bandScore ?? null}
+                  onClick={
+                    skill === "reading"
+                      ? () => router.push("/reading")
+                      : undefined
+                  }
                 />
               )
             })}
           </div>
+        )}
+
+        {/* Active quests */}
+        {state && state.quests.length > 0 && (
+          <section className="mt-6">
+            <h2 className="mb-3 text-sm font-semibold">Active quests</h2>
+            <div className="space-y-3">
+              {state.quests.map((q) => (
+                <QuestItem key={q.id} quest={q} />
+              ))}
+            </div>
+          </section>
         )}
       </main>
     </div>
