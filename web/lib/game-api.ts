@@ -20,11 +20,14 @@ export type GameCharacter = {
   bandScore: number | null
 }
 
+export type QuestType = "daily" | "weekly" | "monthly"
+
 export type Quest = {
   id: number
   titleMn: string
   descriptionMn: string
   skillTarget: string
+  questType: QuestType
   requiredCount: number
   progress: number
   isCompleted: boolean
@@ -38,7 +41,17 @@ export type GameState = {
   quests: Quest[]
 }
 
+// One day's exercise-submission count, for the profile activity heatmap.
+export type ActivityDay = {
+  date: string // YYYY-MM-DD
+  count: number
+}
+
 export const gameApi = {
   // Full player state: stats, all 4 characters, today's quests
   getState: (token: string) => apiFetch<GameState>("/game/state", { token }),
+
+  // Daily submission counts for the last 365 days
+  getActivity: (token: string) =>
+    apiFetch<ActivityDay[]>("/game/activity", { token }),
 }

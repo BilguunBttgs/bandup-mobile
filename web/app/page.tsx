@@ -5,20 +5,17 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import {
   BookOpen,
-  CheckCircle,
-  Coins,
-  Fire,
   Headphones,
-  Lightning,
   Microphone,
   PencilSimple,
-  SignOut,
   type Icon,
 } from "@phosphor-icons/react"
 import { useAuthStore } from "@/store/auth"
-import { gameApi, type GameState, type Quest, type Skill } from "@/lib/game-api"
+import { gameApi, type GameState, type Skill } from "@/lib/game-api"
 import { ApiError } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { BottomNav } from "@/components/bottom-nav"
+import { QuestsSection } from "@/components/quests-section"
 
 // ── Skill metadata ───────────────────────────────────────────────────────────
 
@@ -38,43 +35,24 @@ const SKILL_META: Record<
   listening: {
     label: "Listening",
     Icon: Headphones,
-    image: "/assets/listening.png",
+    image: "/assets/listening2.png",
     accent: "text-violet-500",
     ring: "ring-violet-500/30",
   },
   writing: {
     label: "Writing",
     Icon: PencilSimple,
-    image: "/assets/writing.png",
+    image: "/assets/writing2.png",
     accent: "text-amber-500",
     ring: "ring-amber-500/30",
   },
   speaking: {
     label: "Speaking",
     Icon: Microphone,
-    image: "/assets/speaking.png",
+    image: "/assets/speaking2.png",
     accent: "text-rose-500",
     ring: "ring-rose-500/30",
   },
-}
-
-// ── Header stat chip ──────────────────────────────────────────────────────────
-
-function StatChip({
-  icon: IconCmp,
-  value,
-  color,
-}: {
-  icon: Icon
-  value: number
-  color: string
-}) {
-  return (
-    <div className="flex items-center gap-1">
-      <IconCmp size={18} weight="fill" className={color} />
-      <span className="text-sm font-semibold tabular-nums">{value}</span>
-    </div>
-  )
 }
 
 // ── Character card ────────────────────────────────────────────────────────────
@@ -170,70 +148,11 @@ function CharacterCard({
   )
 }
 
-// ── Quest item ────────────────────────────────────────────────────────────────
-
-function QuestItem({ quest }: { quest: Quest }) {
-  const pct =
-    quest.requiredCount > 0
-      ? Math.min(100, (quest.progress / quest.requiredCount) * 100)
-      : 0
-
-  return (
-    <div
-      className={cn(
-        "rounded-2xl border bg-card p-4",
-        quest.isCompleted && "opacity-70"
-      )}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="flex items-center gap-1.5 text-sm font-medium">
-            {quest.isCompleted && (
-              <CheckCircle size={16} weight="fill" className="text-green-500" />
-            )}
-            {quest.titleMn}
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {quest.descriptionMn}
-          </p>
-        </div>
-
-        <div className="flex shrink-0 flex-col items-end gap-1 text-[11px] font-semibold">
-          <span className="flex items-center gap-0.5 text-violet-500">
-            <Lightning size={13} weight="fill" />+{quest.xpReward}
-          </span>
-          <span className="flex items-center gap-0.5 text-amber-500">
-            <Coins size={13} weight="fill" />+{quest.coinReward}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3">
-        <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground">
-          <span>Progress</span>
-          <span className="tabular-nums">
-            {quest.progress}/{quest.requiredCount}
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all",
-              quest.isCompleted ? "bg-green-500" : "bg-primary"
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { token, user, clearAuth, _hasHydrated } = useAuthStore()
+  const { token, user, _hasHydrated } = useAuthStore()
 
   const [state, setState] = useState<GameState | null>(null)
   const [error, setError] = useState("")
@@ -273,39 +192,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b bg-card px-4 py-3">
-        <div className="flex items-center gap-4">
-          <StatChip
-            icon={Lightning}
-            value={state?.stats.totalXp ?? 0}
-            color="text-violet-500"
-          />
-          <StatChip
-            icon={Coins}
-            value={state?.stats.coins ?? 0}
-            color="text-amber-500"
-          />
-          <StatChip
-            icon={Fire}
-            value={state?.stats.streakDays ?? 0}
-            color="text-orange-500"
-          />
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            clearAuth()
-            router.replace("/get-started")
-          }}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Sign out"
-        >
-          <SignOut size={20} />
-        </button>
-      </header>
-
       {/* Main */}
       <main className="flex-1 overflow-y-auto px-4 py-5">
         <div className="mb-5">
@@ -342,18 +228,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Active quests */}
+        {/* Daily quests (full list lives on the Quests tab) */}
         {state && state.quests.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-3 text-sm font-semibold">Active quests</h2>
-            <div className="space-y-3">
-              {state.quests.map((q) => (
-                <QuestItem key={q.id} quest={q} />
-              ))}
-            </div>
-          </section>
+          <QuestsSection quests={state.quests} types={["daily"]} />
         )}
       </main>
+
+      <BottomNav />
     </div>
   )
 }

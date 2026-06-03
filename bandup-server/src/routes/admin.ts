@@ -4,6 +4,7 @@ import { createReadingSchema, createReadingController } from "../controllers/adm
 import { listReadingsAdminController } from "../controllers/admin/listReadings.controller";
 import { deleteReadingController } from "../controllers/admin/deleteReading.controller";
 import { createListeningSchema, createListeningController } from "../controllers/admin/createListening.controller";
+import { reassignQuestsController } from "../controllers/admin/reassignQuests.controller";
 import { mongoError, zodValidationHook } from "../lib/errors";
 
 const admin = new Hono<{ Bindings: CloudflareBindings }>();
@@ -50,5 +51,9 @@ admin.delete("/readings/:id", deleteReadingController);
 // POST /admin/listenings
 // Pass audioKey: null to receive a presigned PUT URL; re-call with the key to insert the record.
 admin.post("/listenings", zValidator("json", createListeningSchema, zodValidationHook), createListeningController);
+
+// POST /admin/quests/reassign
+// Wipes all user_quests and regenerates the current period for every onboarded user.
+admin.post("/quests/reassign", reassignQuestsController);
 
 export { admin };

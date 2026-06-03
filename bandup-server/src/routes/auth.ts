@@ -8,6 +8,10 @@ import {
   onboardingStepSchema,
   onboardingStepController,
 } from "../controllers/auth/onboardingStep.controller";
+import {
+  changePinSchema,
+  changePinController,
+} from "../controllers/auth/changePin.controller";
 
 const auth = new Hono<{
   Bindings: CloudflareBindings;
@@ -26,6 +30,14 @@ auth.post(
   authMiddleware,
   zValidator("json", onboardingStepSchema, zodValidationHook),
   onboardingStepController,
+);
+
+// POST /auth/change-pin — JWT required
+auth.post(
+  "/change-pin",
+  authMiddleware,
+  zValidator("json", changePinSchema, zodValidationHook),
+  changePinController,
 );
 
 export { auth };

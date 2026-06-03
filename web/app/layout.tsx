@@ -3,6 +3,7 @@ import { Geist_Mono, Figtree } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { MobileFrame } from "@/components/mobile-frame"
+import { AppShell } from "@/components/app-shell"
 import { cn } from "@/lib/utils"
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" })
@@ -30,7 +31,9 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <MobileFrame>{children}</MobileFrame>
+          <MobileFrame>
+            <AppShell>{children}</AppShell>
+          </MobileFrame>
         </ThemeProvider>
       </body>
     </html>

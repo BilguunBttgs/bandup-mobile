@@ -6,6 +6,7 @@ import { gameStateController } from "../controllers/game/state.controller";
 import { checkinController } from "../controllers/game/checkin.controller";
 import { reviveSchema, reviveController } from "../controllers/game/revive.controller";
 import { leaderboardController } from "../controllers/game/leaderboard.controller";
+import { activityController } from "../controllers/game/activity.controller";
 
 const gameRouter = new Hono<{
   Bindings: CloudflareBindings;
@@ -26,5 +27,8 @@ gameRouter.post("/revive", zValidator("json", reviveSchema, zodValidationHook), 
 
 // GET /game/leaderboard — top 20 by totalXp
 gameRouter.get("/leaderboard", leaderboardController);
+
+// GET /game/activity — daily submission counts for the last 365 days
+gameRouter.get("/activity", activityController);
 
 export { gameRouter };

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { users, characters, userStats } from "../../db/schema";
-import { generateDailyQuests } from "../../lib/quest-engine";
+import { generateQuests } from "../../lib/quest-engine";
 import { mongoError } from "../../lib/errors";
 
 export const onboardingStepSchema = z.object({
@@ -136,8 +136,8 @@ export async function onboardingStepController(
       }
     }
 
-    // Assign today's first quests
-    const assignedQuests = await generateDailyQuests(db, userId, dateIso);
+    // Assign the user's first quests (daily / weekly / monthly)
+    const assignedQuests = await generateQuests(db, userId, dateIso);
 
     // Mark onboarding complete last (so retries are safe until this point)
     await db

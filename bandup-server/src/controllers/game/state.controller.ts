@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { eq } from "drizzle-orm";
 import { createDb } from "../../db";
 import { users, userStats, characters } from "../../db/schema";
-import { getTodayQuests } from "../../lib/quest-engine";
+import { getActiveQuests } from "../../lib/quest-engine";
 
 const ALL_SKILLS = ["reading", "listening", "writing", "speaking"] as const;
 type Skill = (typeof ALL_SKILLS)[number];
@@ -64,9 +64,9 @@ export async function gameStateController(c: Context<GameEnv>): Promise<Response
     .where(eq(users.id, userId))
     .limit(1);
 
-  // ── Today's quests ────────────────────────────────────────────────────────
+  // ── Active quests (daily / weekly / monthly) ──────────────────────────────
   const dateIso = new Date().toISOString().slice(0, 10);
-  const quests = await getTodayQuests(db, userId, dateIso);
+  const quests = await getActiveQuests(db, userId, dateIso);
 
   return c.json({
     stats: stats ?? { totalXp: 0, coins: 0, streakDays: 0, lastActivityDate: null },
@@ -84,6 +84,9 @@ export async function gameStateController(c: Context<GameEnv>): Promise<Response
       titleMn: q.titleMn,
       descriptionMn: q.descriptionMn,
       skillTarget: q.skillTarget,
+      questType: q.questType,
+      periodStart: q.periodStart,
+      periodEnd: q.periodEnd,
       requiredCount: q.requiredCount,
       progress: q.progress,
       isCompleted: q.isCompleted,

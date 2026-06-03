@@ -8,6 +8,7 @@ export const errors = {
   AUTH_MISSING_TOKEN: "Нэвтрэх токен байхгүй байна",
   AUTH_INVALID_TOKEN: "Токен хүчингүй эсвэл хугацаа дууссан байна",
   AUTH_UNAUTHORIZED: "Зөвшөөрөлгүй хүсэлт",
+  PIN_INCORRECT: "Одоогийн PIN буруу байна",
   // Onboarding
   ONBOARDING_DONE: "Бүртгэлийн алхам аль хэдийн дууссан байна",
   INVALID_STEP: "Буруу алхам",

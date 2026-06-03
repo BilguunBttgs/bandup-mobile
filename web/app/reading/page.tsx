@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Clock, ListChecks } from "@phosphor-icons/react"
+import { CheckCircle, Clock, ListChecks } from "@phosphor-icons/react"
 import { useAuthStore } from "@/store/auth"
 import { authApi, type ReadingSummary } from "@/lib/auth-api"
 import { ApiError } from "@/lib/api"
@@ -59,21 +59,9 @@ export default function ReadingListPage() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b bg-card px-4 py-3">
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Back"
-        >
-          <ArrowLeft size={20} />
-        </button>
-        <h1 className="text-base font-semibold">Reading</h1>
-      </header>
-
       {/* List */}
       <main className="flex-1 overflow-y-auto px-4 py-5">
+        <h1 className="mb-5 text-xl font-semibold">Reading</h1>
         {error ? (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
@@ -94,7 +82,16 @@ export default function ReadingListPage() {
                   className="w-full rounded-2xl border bg-card p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <p className="font-medium">{r.title}</p>
+                    <div className="flex min-w-0 items-center gap-2">
+                      {r.completed && (
+                        <CheckCircle
+                          size={18}
+                          weight="fill"
+                          className="shrink-0 text-green-500"
+                        />
+                      )}
+                      <p className="min-w-0 truncate font-medium">{r.title}</p>
+                    </div>
                     <span
                       className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize",
@@ -114,6 +111,11 @@ export default function ReadingListPage() {
                       <Clock size={14} />
                       {formatMinutes(r.timerSeconds)}
                     </span>
+                    {r.completed && r.bestBandScore != null && (
+                      <span className="ml-auto flex items-center gap-1 font-semibold text-green-600">
+                        Band {r.bestBandScore.toFixed(1)}
+                      </span>
+                    )}
                   </div>
                 </button>
               </li>

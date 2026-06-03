@@ -320,6 +320,7 @@ One row per user (unique constraint on `userId`). Tracks lifetime economy state.
 | `titleMn` | text | Mongolian display title |
 | `descriptionMn` | text | Mongolian description |
 | `skillTarget` | `"reading"│"listening"│"writing"│"speaking"│"any"` | `"any"` counts all skills |
+| `questType` | `"daily"│"weekly"│"monthly"` | Period the quest stays active once assigned; default `"daily"` |
 | `requiredCount` | integer | Number of completions required |
 | `xpReward` | integer | XP granted on completion |
 | `coinReward` | integer | Coins granted on completion |
@@ -331,10 +332,13 @@ One row per user (unique constraint on `userId`). Tracks lifetime economy state.
 | `id` | integer PK | |
 | `userId` | integer FK → users.id | CASCADE delete |
 | `questId` | integer FK → quests.id | CASCADE delete |
-| `date` | text | ISO date `YYYY-MM-DD` — the day this quest was assigned |
+| `periodStart` | text | ISO date `YYYY-MM-DD` — first day the quest is active (inclusive) |
+| `periodEnd` | text | ISO date `YYYY-MM-DD` — last day the quest is active (inclusive) |
 | `progress` | integer | How many times the activity has been completed; default `0` |
 | `isCompleted` | boolean | default `false` |
 | `completedAt` | timestamp? | Null until completed |
+
+> A quest is **active/visible** while today falls within `[periodStart, periodEnd]`. Periods are calendar-aligned by `questType`: daily = one day, weekly = Mon–Sun of the assigned week, monthly = the assigned calendar month.
 
 ---
 
@@ -439,7 +443,7 @@ Advances the user through the 4-step onboarding flow. Must be called in order (s
 | `0` | `{ "target_band": 7.0 }` | Stores `users.targetBand`; advances to step 1 |
 | `1` | `{ "daily_goal_minutes": 30 }` | Stores `users.dailyGoalMinutes`; advances to step 2 |
 | `2` | `{ "reading_id": 1, "answers": [{ "question_id": 10, "option_id": 42 }] }` | Scores answers against DB, stores initial `users.readingScore`; advances to step 3 |
-| `3` | _(none needed)_ | Creates `user_stats` + 4 character rows + today's quests; sets `isOnboarding=false` |
+| `3` | _(none needed)_ | Creates `user_stats` + 4 character rows + the current period's quests (daily/weekly/monthly); sets `isOnboarding=false` |
 
 **Response `200`:**
 ```json
@@ -729,6 +733,7 @@ Returns the full player state in one call. Lazy-initialises `user_stats` and all
   ],
   "quests": [
     { "id": 1, "titleMn": "Нэг дасгал хий", "descriptionMn": "...", "skillTarget": "reading",
+      "questType": "daily", "periodStart": "2026-05-28", "periodEnd": "2026-05-28",
       "requiredCount": 1, "progress": 0, "isCompleted": false, "xpReward": 50, "coinReward": 10 }
   ]
 }
@@ -737,7 +742,7 @@ Returns the full player state in one call. Lazy-initialises `user_stats` and all
 ---
 
 #### `POST /game/checkin`
-Records today's activity (streak), then auto-generates today's quests if this is the first check-in of the day.
+Records today's activity (streak), then auto-generates the current period's quests (daily / weekly / monthly) if this is the first check-in of the day. Quest generation is idempotent per window.
 
 **Response `200`:**
 ```json
@@ -797,33 +802,34 @@ calculateBandScore(0, 5)  // → 0.0
 PBKDF2 + SHA-256, 100 k iterations, 16-byte random salt. Output is base64-encoded `(salt || derivedKey)`. `verifyPassword` uses constant-time comparison to prevent timing attacks.
 
 ### `src/lib/quest-engine.ts`
-Daily quest assignment, progress tracking, and completion. No module-level DB.
+Quest assignment, progress tracking, and completion across three period types (daily / weekly / monthly). No module-level DB.
 
-**Exported types:**
-- `CompletedQuest` — `UserQuest` + `{ titleMn, skillTarget, xpReward, coinReward }` — returned by `incrementQuestProgress` so callers can immediately award rewards via xp-engine.
-- `QuestWithTemplate` — `UserQuest` + full quest template fields — returned by `getTodayQuests`.
+**Exported types & constants:**
+- `QuestType` — `"daily" | "weekly" | "monthly"`.
+- `QUESTS_PER_PERIOD` — `{ daily: 3, weekly: 2, monthly: 1 }` — how many quests of each type are assigned per active period.
+- `CompletedQuest` — `UserQuest` + `{ titleMn, skillTarget, questType, xpReward, coinReward }` — returned by `incrementQuestProgress` so callers can immediately award rewards via xp-engine.
+- `QuestWithTemplate` — `UserQuest` + full quest template fields (incl. `questType`) — returned by `getActiveQuests`.
 
 **Functions:**
 
 | Function | What it does | Returns |
 |---|---|---|
-| `generateDailyQuests(db, userId, dateIso)` | Fetches all active quest templates, excludes ones already assigned for this user+date, Fisher-Yates shuffles the remainder, inserts up to 3 new `user_quests` rows | `UserQuest[]` (newly inserted) |
-| `incrementQuestProgress(db, userId, skill, dateIso)` | Joins today's incomplete `user_quests` with templates; filters where `skillTarget === skill \|\| skillTarget === "any"`; increments `progress` by 1; marks `isCompleted=true` + sets `completedAt` when `progress >= requiredCount` | `CompletedQuest[]` (only newly completed) |
-| `getTodayQuests(db, userId, dateIso)` | Single inner-join query returning all quests (any state) for the given user+date | `QuestWithTemplate[]` |
+| `getPeriodRange(type, dateIso)` | Pure helper. Computes the calendar-aligned `{ start, end }` (ISO dates, UTC) for a quest of `type` containing `dateIso`. daily → `[dateIso, dateIso]`; weekly → Mon–Sun; monthly → first–last of month | `{ start, end }` |
+| `generateQuests(db, userId, dateIso)` | For each `questType`, computes the current period window and fills up to `QUESTS_PER_PERIOD[type]` active quest templates not already assigned for that window (Fisher-Yates shuffled), inserting new `user_quests` rows with `periodStart`/`periodEnd` | `UserQuest[]` (newly inserted, across all types) |
+| `incrementQuestProgress(db, userId, skill, dateIso)` | Joins incomplete `user_quests` whose window contains `dateIso` with templates; filters where `skillTarget === skill \|\| skillTarget === "any"`; increments `progress` by 1; marks `isCompleted=true` + sets `completedAt` when `progress >= requiredCount` | `CompletedQuest[]` (only newly completed) |
+| `getActiveQuests(db, userId, dateIso)` | Single inner-join query returning all quests (any state) whose window contains `dateIso` for the given user | `QuestWithTemplate[]` |
 
-`generateDailyQuests` is idempotent per day — calling it twice won't create duplicate quests. All DB writes use sequential `for` loops (D1 serial requirement).
+`generateQuests` is idempotent per window — calling it twice within the same day/week/month won't create duplicate quests. All DB writes use sequential `for` loops (D1 serial requirement).
 
-**Seed file:** `src/db/seeds/quests.sql` — 10 starter quests in Mongolian.
+**Seed file:** `src/db/seeds/quests.sql` — starter quests in Mongolian across all period types.
 
-| Skill | Quests |
+| `questType` | Examples |
 |---|---|
-| `reading` | Complete 1; Complete 3 |
-| `listening` | Complete 1; Complete 3 |
-| `writing` | Complete 1 |
-| `speaking` | Complete 1 |
-| `any` | Complete 1 / 3 / 5 / 10 |
+| `daily` | reading ×1/×3, listening ×1/×3, writing ×1, speaking ×1, any ×1/×2/×3/×5 |
+| `weekly` | any ×10, reading ×5, listening ×5, writing ×3 |
+| `monthly` | any ×40, reading ×20 |
 
-XP rewards range from 30 (any×1) to 500 (any×10). Uses `INSERT OR IGNORE` so it's safe to re-run.
+Uses `INSERT OR IGNORE`. To reset: `DELETE FROM quests;` then re-run.
 
 ```bash
 # Local dev

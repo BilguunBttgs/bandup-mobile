@@ -1,5 +1,11 @@
 -- BandUp — starter quest seeds
--- 10 quests covering all 4 skills (reading, listening, writing, speaking) + "any".
+-- Quests covering all 4 skills (reading, listening, writing, speaking) + "any",
+-- across all three period types: daily, weekly, monthly.
+--
+-- quest_type controls how long a quest stays active once assigned:
+--   'daily'   → one calendar day
+--   'weekly'  → the calendar week (Mon–Sun)
+--   'monthly' → the calendar month
 --
 -- HOW TO RUN
 -- ──────────
@@ -12,163 +18,168 @@
 -- Safe to re-run — INSERT OR IGNORE skips rows whose (title_mn) already exist.
 -- If you need a full reset first: DELETE FROM quests; then re-run.
 
+-- ════════════════════════════════════════════════════════════════════════════
+-- DAILY quests
+-- ════════════════════════════════════════════════════════════════════════════
+
 -- ── Reading ────────────────────────────────────────────────────────────────────
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Нэг уншилт хий',
     'Өнөөдөр нэг уншилтын дасгал амжилттай дуусга.',
-    'reading', 1, 50, 10, 1
+    'reading', 'daily', 1, 50, 10, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     '3 уншилт хий',
     'Өнөөдөр гурван уншилтын дасгал дуусга.',
-    'reading', 3, 150, 30, 1
+    'reading', 'daily', 3, 150, 30, 1
   );
 
 -- ── Listening ─────────────────────────────────────────────────────────────────
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Нэг сонсолт хий',
     'Өнөөдөр нэг сонсолтын дасгал амжилттай дуусга.',
-    'listening', 1, 50, 10, 1
+    'listening', 'daily', 1, 50, 10, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     '3 сонсолт хий',
     'Өнөөдөр гурван сонсолтын дасгал дуусга.',
-    'listening', 3, 150, 30, 1
+    'listening', 'daily', 3, 150, 30, 1
   );
 
 -- ── Writing ───────────────────────────────────────────────────────────────────
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Нэг бичлэг хий',
     'Өнөөдөр нэг бичлэгийн дасгал амжилттай дуусга.',
-    'writing', 1, 60, 12, 1
+    'writing', 'daily', 1, 60, 12, 1
   );
 
 -- ── Speaking ──────────────────────────────────────────────────────────────────
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Нэг ярилт хий',
     'Өнөөдөр нэг ярилтын дасгал амжилттай дуусга.',
-    'speaking', 1, 60, 12, 1
+    'speaking', 'daily', 1, 60, 12, 1
   );
 
 -- ── Any skill ─────────────────────────────────────────────────────────────────
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Эхний алхам',
     'Аль ч ур чадварын нэг дасгал дуусга.',
-    'any', 1, 30, 5, 1
+    'any', 'daily', 1, 30, 5, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Гурван дасгал',
     'Аль ч ур чадварын гурван дасгал дуусга.',
-    'any', 3, 80, 15, 1
+    'any', 'daily', 3, 80, 15, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Тав дасгал',
     'Аль ч ур чадварын таван дасгал дуусга.',
-    'any', 5, 200, 40, 1
+    'any', 'daily', 5, 200, 40, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
-VALUES
-  (
-    'Арван дасгал',
-    'Аль ч ур чадварын арван дасгал дуусга.',
-    'any', 10, 500, 100, 1
-  );
-
--- ── Extra pool (more variety) ───────────────────────────────────────────────────
-
--- Reading
-INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
-VALUES
-  (
-    '5 уншилт хий',
-    'Өнөөдөр таван уншилтын дасгал дуусга.',
-    'reading', 5, 250, 50, 1
-  );
-
--- Listening
-INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
-VALUES
-  (
-    '5 сонсолт хий',
-    'Өнөөдөр таван сонсолтын дасгал дуусга.',
-    'listening', 5, 250, 50, 1
-  );
-
--- Writing
-INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
-VALUES
-  (
-    '3 бичлэг хий',
-    'Өнөөдөр гурван бичлэгийн дасгал дуусга.',
-    'writing', 3, 180, 36, 1
-  );
-
--- Speaking
-INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
-VALUES
-  (
-    '3 ярилт хий',
-    'Өнөөдөр гурван ярилтын дасгал дуусга.',
-    'speaking', 3, 180, 36, 1
-  );
-
--- Any
-INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
     'Идэвхтэй өдөр',
     'Өнөөдөр аль ч ур чадварын хоёр дасгал дуусга.',
-    'any', 2, 60, 12, 1
+    'any', 'daily', 2, 60, 12, 1
+  );
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- WEEKLY quests (active for the whole Mon–Sun week)
+-- ════════════════════════════════════════════════════════════════════════════
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '7 хоногт 10 дасгал',
+    'Энэ долоо хоногт аль ч ур чадварын арван дасгал дуусга.',
+    'any', 'weekly', 10, 500, 100, 1
   );
 
 INSERT OR IGNORE INTO quests
-  (title_mn, description_mn, skill_target, required_count, xp_reward, coin_reward, is_active)
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
 VALUES
   (
-    'Долоон дасгал',
-    'Аль ч ур чадварын долоон дасгал дуусга.',
-    'any', 7, 350, 70, 1
+    '7 хоногт 5 уншилт',
+    'Энэ долоо хоногт таван уншилтын дасгал дуусга.',
+    'reading', 'weekly', 5, 300, 60, 1
+  );
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '7 хоногт 5 сонсолт',
+    'Энэ долоо хоногт таван сонсолтын дасгал дуусга.',
+    'listening', 'weekly', 5, 300, 60, 1
+  );
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    '7 хоногт 3 бичлэг',
+    'Энэ долоо хоногт гурван бичлэгийн дасгал дуусга.',
+    'writing', 'weekly', 3, 250, 50, 1
+  );
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- MONTHLY quests (active for the whole calendar month)
+-- ════════════════════════════════════════════════════════════════════════════
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    'Сарын 40 дасгал',
+    'Энэ сард аль ч ур чадварын дөчин дасгал дуусга.',
+    'any', 'monthly', 40, 2000, 400, 1
+  );
+
+INSERT OR IGNORE INTO quests
+  (title_mn, description_mn, skill_target, quest_type, required_count, xp_reward, coin_reward, is_active)
+VALUES
+  (
+    'Сарын төгс уншигч',
+    'Энэ сард хорин уншилтын дасгал дуусга.',
+    'reading', 'monthly', 20, 1200, 240, 1
   );
