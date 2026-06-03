@@ -15,8 +15,8 @@ function shouldHideHeader(pathname: string) {
   ) {
     return true
   }
-  // /reading/<id> (exercise + results) — but not the /reading list itself
-  return /^\/reading\/[^/]+$/.test(pathname)
+  // The reading exercise/results screen carries its own header — not the list.
+  return pathname.startsWith("/reading/exercise")
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {

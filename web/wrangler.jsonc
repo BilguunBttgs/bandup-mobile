@@ -1,0 +1,16 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bandup-web",
+  "compatibility_date": "2025-08-03",
+  // Static-assets-only Worker: serves the Next.js static export in ./out.
+  // The app is a client-rendered SPA — there is no server runtime.
+  "assets": {
+    "directory": "./out",
+    // Next export emits per-route .html plus a 404.html; serve that on misses.
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

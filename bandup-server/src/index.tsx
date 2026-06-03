@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { desc, eq } from "drizzle-orm";
 import { renderer } from "./renderer";
 import { auth } from "./routes/auth";
@@ -26,6 +27,18 @@ app.onError((err, c) => {
   console.error(`[${c.req.method}] ${c.req.url}`, err);
   return c.json(mongoError("INTERNAL_ERROR"), 500);
 });
+
+// CORS for the browser web app. Auth is Bearer-token based (no cookies), so a
+// wildcard origin is safe; tighten by setting the WEB_ORIGIN var to the web
+// app's URL in production. Registered per-request to read env.
+app.use("*", (c, next) =>
+  cors({
+    origin: c.env.WEB_ORIGIN ?? "*",
+    allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization"],
+    maxAge: 86400,
+  })(c, next),
+);
 
 app.use(renderer);
 

@@ -1,7 +1,7 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { Suspense, useCallback, useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import confetti from "canvas-confetti"
 import {
@@ -32,10 +32,10 @@ function formatClock(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`
 }
 
-export default function ReadingExercisePage() {
+function ReadingExerciseContent() {
   const router = useRouter()
-  const params = useParams<{ id: string }>()
-  const readingId = Number(params.id)
+  const searchParams = useSearchParams()
+  const readingId = Number(searchParams.get("id"))
   const { token, user, _hasHydrated } = useAuthStore()
 
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
@@ -335,6 +335,15 @@ export default function ReadingExercisePage() {
         </div>
       </section>
     </div>
+  )
+}
+
+// useSearchParams requires a Suspense boundary under static export.
+export default function ReadingExercisePage() {
+  return (
+    <Suspense fallback={null}>
+      <ReadingExerciseContent />
+    </Suspense>
   )
 }
 

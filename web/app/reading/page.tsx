@@ -96,7 +96,7 @@ export default function ReadingListPage() {
               <li key={r.id}>
                 <button
                   type="button"
-                  onClick={() => router.push(`/reading/${r.id}`)}
+                  onClick={() => router.push(`/reading/exercise?id=${r.id}`)}
                   className="w-full rounded-2xl border bg-card p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted"
                 >
                   <div className="flex items-start justify-between gap-3">
