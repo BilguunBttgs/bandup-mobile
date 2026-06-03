@@ -340,6 +340,33 @@ export default function ReadingExercisePage() {
 
 // ── Results view ───────────────────────────────────────────────────────────────
 
+// The mascot's reaction depends on the band score: a cheer for strong results,
+// encouragement in the middle, and a sympathetic nudge when it's low.
+function resultMood(bandScore: number) {
+  if (bandScore >= 7) {
+    return {
+      image: "/assets/congratz.png",
+      alt: "Celebrating mascot",
+      message: "Great job! Outstanding result 🎉",
+      celebrate: true,
+    }
+  }
+  if (bandScore >= 5) {
+    return {
+      image: "/assets/congratz.png",
+      alt: "Cheering mascot",
+      message: "Almost there — keep going, you're improving!",
+      celebrate: true,
+    }
+  }
+  return {
+    image: "/assets/sad-mascot.png",
+    alt: "Sad mascot",
+    message: "We can try again and improve together 💪",
+    celebrate: false,
+  }
+}
+
 function ResultsView({
   detail,
   result,
@@ -351,19 +378,22 @@ function ResultsView({
 }) {
   const [reviewOpen, setReviewOpen] = useState(false)
 
+  const mood = resultMood(result.band_score)
+
   const resultByQuestion = new Map(
     result.answers.map((a) => [a.question_id, a])
   )
 
-  // Celebrate on mount — a single, modest burst.
+  // Celebrate on mount — a single, modest burst (only for positive results).
   useEffect(() => {
+    if (!mood.celebrate) return
     confetti({
       particleCount: 60,
       spread: 70,
       startVelocity: 35,
       origin: { y: 0.7 },
     })
-  }, [])
+  }, [mood.celebrate])
 
   return (
     <div className="flex h-full flex-col">
@@ -372,16 +402,21 @@ function ResultsView({
       </header>
 
       <main className="flex-1 overflow-y-auto px-4 py-5">
-        {/* Celebration */}
-        <div className="mb-5 flex justify-center">
+        {/* Mascot reaction with a speech bubble */}
+        <div className="mb-5 flex items-center gap-3">
           <Image
-            src="/assets/congratz.png"
-            alt="Congratulations!"
-            width={220}
-            height={220}
+            src={mood.image}
+            alt={mood.alt}
+            width={160}
+            height={160}
             priority
-            className="h-auto w-44 object-contain"
+            className="h-auto w-28 shrink-0 object-contain"
           />
+          <div className="relative flex-1 rounded-2xl border bg-card px-4 py-3 text-sm font-medium">
+            {/* Tail pointing toward the mascot */}
+            <span className="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 rotate-45 border-b border-l bg-card" />
+            {mood.message}
+          </div>
         </div>
 
         {/* Score summary */}

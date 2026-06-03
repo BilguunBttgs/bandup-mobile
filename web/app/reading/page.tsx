@@ -2,11 +2,17 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle, Clock, ListChecks } from "@phosphor-icons/react"
+import {
+  ArrowLeft,
+  CheckCircle,
+  Clock,
+  ListChecks,
+} from "@phosphor-icons/react"
 import { useAuthStore } from "@/store/auth"
 import { authApi, type ReadingSummary } from "@/lib/auth-api"
 import { ApiError } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { BottomNav } from "@/components/bottom-nav"
 
 const LEVEL_STYLES: Record<string, string> = {
   easy: "bg-green-500/15 text-green-600",
@@ -59,9 +65,21 @@ export default function ReadingListPage() {
 
   return (
     <div className="flex h-full flex-col">
+      {/* Sub-header with back-to-home */}
+      <div className="flex items-center gap-3 border-b bg-card px-4 py-3">
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+          aria-label="Back to home"
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <h1 className="text-base font-semibold">Reading</h1>
+      </div>
+
       {/* List */}
       <main className="flex-1 overflow-y-auto px-4 py-5">
-        <h1 className="mb-5 text-xl font-semibold">Reading</h1>
         {error ? (
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {error}
@@ -123,6 +141,8 @@ export default function ReadingListPage() {
           </ul>
         )}
       </main>
+
+      <BottomNav />
     </div>
   )
 }
