@@ -35,7 +35,7 @@ app.use("*", (c, next) =>
   cors({
     origin: c.env.WEB_ORIGIN ?? "*",
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization", "X-Admin-Key"],
     maxAge: 86400,
   })(c, next),
 );

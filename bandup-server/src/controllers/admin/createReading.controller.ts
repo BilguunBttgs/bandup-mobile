@@ -41,43 +41,45 @@ export async function createReadingController(
   const body = await c.req.json<CreateReadingInput>();
   const db = createDb(c.env.DB);
 
-  // Insert reading → questions → options atomically.
-  // D1 transactions are serial — sequential for-loop, not Promise.all.
-  const newReadingId = await db.transaction(async (tx) => {
-    const [newReading] = await tx
-      .insert(readings)
+  // Insert reading → questions → options sequentially.
+  // NOTE: Cloudflare D1 does not support interactive transactions over the
+  // Workers binding (SQL `BEGIN TRANSACTION`/`SAVEPOINT` are rejected), and
+  // `db.batch()` can't be used here because each question's auto-generated id
+  // is needed as the FK for its options. So these run as plain sequential
+  // inserts — not atomic. A mid-way failure can leave a partial reading.
+  const [newReading] = await db
+    .insert(readings)
+    .values({
+      title: body.title,
+      passage: body.passage,
+      level: body.level,
+      timerSeconds: body.timer_seconds,
+    })
+    .returning({ id: readings.id });
+
+  for (const q of body.questions) {
+    const [newQuestion] = await db
+      .insert(questions)
       .values({
-        title: body.title,
-        passage: body.passage,
-        level: body.level,
-        timerSeconds: body.timer_seconds,
+        readingId: newReading.id,
+        order: q.order,
+        text: q.text,
+        type: q.type,
+        explanation: q.explanation ?? null,
       })
-      .returning({ id: readings.id });
+      .returning({ id: questions.id });
 
-    for (const q of body.questions) {
-      const [newQuestion] = await tx
-        .insert(questions)
-        .values({
-          readingId: newReading.id,
-          order: q.order,
-          text: q.text,
-          type: q.type,
-          explanation: q.explanation ?? null,
-        })
-        .returning({ id: questions.id });
+    await db.insert(questionOptions).values(
+      q.options.map((opt) => ({
+        questionId: newQuestion.id,
+        label: opt.label,
+        text: opt.text,
+        isCorrect: opt.is_correct,
+      })),
+    );
+  }
 
-      await tx.insert(questionOptions).values(
-        q.options.map((opt) => ({
-          questionId: newQuestion.id,
-          label: opt.label,
-          text: opt.text,
-          isCorrect: opt.is_correct,
-        })),
-      );
-    }
-
-    return newReading.id;
-  });
+  const newReadingId = newReading.id;
 
   return c.json({ id: newReadingId, message: "Reading created successfully" }, 201);
 }

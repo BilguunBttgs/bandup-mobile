@@ -5,6 +5,7 @@ import { listReadingsAdminController } from "../controllers/admin/listReadings.c
 import { deleteReadingController } from "../controllers/admin/deleteReading.controller";
 import { createListeningSchema, createListeningController } from "../controllers/admin/createListening.controller";
 import { reassignQuestsController } from "../controllers/admin/reassignQuests.controller";
+import { statsController } from "../controllers/admin/stats.controller";
 import { mongoError, zodValidationHook } from "../lib/errors";
 
 const admin = new Hono<{ Bindings: CloudflareBindings }>();
@@ -38,6 +39,9 @@ admin.use("*", async (c, next) => {
   }
   await next();
 });
+
+// GET /admin/stats — aggregate usage counters for the dashboard
+admin.get("/stats", statsController);
 
 // POST /admin/readings
 admin.post("/readings", zValidator("json", createReadingSchema, zodValidationHook), createReadingController);
